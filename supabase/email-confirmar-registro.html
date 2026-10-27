@@ -1,0 +1,15 @@
+<!-- Pega este HTML en Supabase → Authentication → Emails (Email Templates). -->
+<div style="margin:0;padding:24px 12px;background:#F1F4EE;font-family:Arial,Helvetica,sans-serif;color:#13241C">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#FFFFFF;border-radius:16px;overflow:hidden">
+    <tr><td style="background:#1F5C45;padding:22px 28px;color:#FFFFFF;font-size:22px;font-weight:bold">NexoApp</td></tr>
+    <tr><td style="padding:28px">
+      <h1 style="margin:0 0 12px;font-size:24px;line-height:1.25;color:#13241C">Te damos la bienvenida a NexoApp</h1>
+      <p style="margin:0 0 8px;font-size:16px;line-height:1.5">{{ if .Data.first_name }}Hola, {{ .Data.first_name }}.{{ else }}Hola.{{ end }}</p>
+      <p style="margin:0 0 24px;font-size:16px;line-height:1.5">Ya casi estás dentro. Toca el botón para continuar con tu registro y empezar a unirte a actividades de tu ciudad.</p>
+      <p style="margin:0 0 24px"><a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#1F5C45;color:#FFFFFF;text-decoration:none;font-weight:bold;font-size:16px;padding:14px 26px;border-radius:12px">Continuar con mi registro</a></p>
+      <p style="margin:0 0 6px;font-size:14px;line-height:1.5;color:#56665D">Este enlace es personal y vence pronto. Si no fuiste tú, ignora este correo.</p>
+      <p style="margin:0;font-size:13px;line-height:1.5;color:#56665D">Si el botón no funciona, copia y pega este enlace en tu navegador:<br><span style="word-break:break-all">{{ .ConfirmationURL }}</span></p>
+    </td></tr>
+    <tr><td style="padding:16px 28px;border-top:1px solid #DCE3DA;font-size:12px;color:#56665D">Clases, jornadas solidarias y protección animal en Bogotá.</td></tr>
+  </table>
+</div>

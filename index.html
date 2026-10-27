@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NexoApp, actividades en el mapa de Bogotá</title>
+<meta name="description" content="Encuentra clases, jornadas solidarias y actividades de protección animal gratis cerca de ti en Bogotá.">
+<meta name="theme-color" content="#1F5C45">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="NexoApp">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="view-list" data-page="home">
+<div class="shell">
+<aside class="side" aria-label="Navegación principal">
+  <div class="brand"><svg viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="12" fill="#1F5C45"/><circle cx="13" cy="20" r="5" fill="#F5B82E"/><circle cx="27" cy="20" r="5" fill="#fff"/><path d="M16 20h8" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>NexoApp</div>
+  <button type="button" class="nav" data-page="home" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>Inicio</button>
+  <button type="button" class="nav" data-page="explore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Explorar</button>
+  <button type="button" class="nav" data-page="admin" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.500-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>Administrar<span class="adm-n" hidden></span></button>
+  <button type="button" class="nav" data-page="profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>Perfil</button>
+  <button type="button" class="btn cta" data-pub="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Publicar algo</button>
+  <button type="button" class="btn ghost" data-install="1" hidden>Instalar app</button>
+  <p class="side-foot">Prototipo con datos de ejemplo.<br><a href="terminos.html" target="_blank" rel="noopener">Términos</a> · <a href="privacidad.html" target="_blank" rel="noopener">Privacidad</a></p>
+</aside>
+<div class="content">
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="12" fill="#1F5C45"/><circle cx="13" cy="20" r="5" fill="#F5B82E"/><circle cx="27" cy="20" r="5" fill="#fff"/><path d="M16 20h8" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+    NexoApp
+  </div>
+  <div class="toggle" role="group" aria-label="Cambiar vista">
+    <button type="button" data-view="list" aria-pressed="true">Lista</button>
+    <button type="button" data-view="map" aria-pressed="false">Mapa</button>
+  </div>
+</header>
+
+<section class="page" id="home" aria-label="Inicio"></section>
+<section class="page" id="profile" aria-label="Perfil"></section>
+<section class="page" id="admin" aria-label="Administración"></section>
+
+<div class="layout">
+  <section class="panel" id="panel" aria-label="Actividades">
+    <div class="filters">
+      <label class="sr" for="q">Buscar actividades</label>
+      <input class="field" id="q" type="search" placeholder="Busca un tema: huerta, inglés, adopción">
+      <div class="row2">
+        <label class="sr" for="loc">Localidad</label>
+        <select class="field" id="loc"><option value="">Todas las localidades</option></select>
+        <button class="btn ghost" id="near" type="button">Cerca de mí</button>
+      </div>
+      <div class="chips" id="chips" role="group" aria-label="Filtrar por categoría"></div>
+      <div class="chips" id="whens" role="group" aria-label="Filtrar por fecha"></div>
+      <p class="sub" id="count" aria-live="polite"></p>
+    </div>
+    <div class="list" id="list"></div>
+  </section>
+
+  <section class="mapwrap" aria-label="Mapa de actividades">
+    <div id="map"></div>
+  </section>
+</div>
+</div>
+</div>
+
+<nav class="tabbar" aria-label="Navegación principal">
+  <button type="button" class="tab" data-page="home" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg><span>Inicio</span></button>
+  <button type="button" class="tab" data-page="explore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><span>Explorar</span></button>
+  <button type="button" class="tab create" data-pub="1"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span><span>Publicar</span></button>
+  <button type="button" class="tab" data-page="admin" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.500-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span>Admin</span><span class="adm-n" hidden></span></button>
+  <button type="button" class="tab" data-page="profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg><span>Perfil</span></button>
+</nav>
+
+<dialog id="detail" aria-labelledby="d-title"></dialog>
+
+<dialog id="login" aria-labelledby="l-title">
+  <form id="lform" class="form" novalidate>
+    <div class="form-head">
+      <h2 id="l-title">Entra a NexoApp</h2>
+      <p class="sub">Te enviamos un enlace a tu correo. Sin contraseñas.</p>
+    </div>
+    <div class="two">
+      <label class="lbl">Nombre
+        <input class="field" id="l-first" autocomplete="given-name" maxlength="40" required placeholder="Laura">
+      </label>
+      <label class="lbl">Apellido
+        <input class="field" id="l-last" autocomplete="family-name" maxlength="40" required placeholder="Méndez">
+      </label>
+    </div>
+    <label class="lbl">Correo electrónico
+      <input class="field" id="l-email" type="email" autocomplete="email" inputmode="email" maxlength="120" required placeholder="tucorreo@ejemplo.com">
+    </label>
+    <label class="chk"><input type="checkbox" id="l-terms" required>
+      <span>Acepto los <a href="terminos.html" target="_blank" rel="noopener">Términos de uso</a> y la <a href="privacidad.html" target="_blank" rel="noopener">Política de privacidad</a>.</span>
+    </label>
+    <p class="err" id="l-err" role="alert" hidden></p>
+    <p class="ok" id="l-ok" role="status" hidden></p>
+    <div class="d-actions">
+      <button type="submit" class="btn block" id="l-send">Enviarme el enlace</button>
+      <button type="button" class="btn ghost block" data-loginclose="1">Cerrar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="reportdlg" aria-labelledby="r-title">
+  <form id="rform" class="form" novalidate>
+    <div class="form-head">
+      <h2 id="r-title">Reportar actividad</h2>
+      <p class="sub" id="r-sub"></p>
+    </div>
+    <label class="lbl">Motivo
+      <select class="field" id="r-reason">
+        <option value="spam">Es spam o publicidad</option>
+        <option value="inapropiado">Contenido inapropiado u ofensivo</option>
+        <option value="falso">Información falsa o engañosa</option>
+        <option value="peligroso">Es peligrosa o ilegal</option>
+        <option value="otro">Otro motivo</option>
+      </select>
+    </label>
+    <label class="lbl">Cuéntanos más (opcional)
+      <textarea class="field" id="r-details" rows="3" maxlength="200" placeholder="Qué viste y por qué crees que no debería estar."></textarea>
+    </label>
+    <p class="err" id="r-err" role="alert" hidden></p>
+    <div class="d-actions">
+      <button type="submit" class="btn block" id="r-send">Enviar reporte</button>
+      <button type="button" class="btn ghost block" data-reportclose="1">Cancelar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="namedlg" aria-labelledby="n-title">
+  <form id="nform" class="form" novalidate>
+    <div class="form-head"><h2 id="n-title">Tu nombre</h2><p class="sub">Así te verán las personas que organizan las actividades.</p></div>
+    <div class="two">
+      <label class="lbl">Nombre<input class="field" id="n-first" autocomplete="given-name" maxlength="40" required></label>
+      <label class="lbl">Apellido<input class="field" id="n-last" autocomplete="family-name" maxlength="40" required></label>
+    </div>
+    <p class="err" id="n-err" role="alert" hidden></p>
+    <div class="d-actions">
+      <button type="submit" class="btn block" id="n-save">Guardar</button>
+      <button type="button" class="btn ghost block" data-nameclose="1">Cancelar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="publish" aria-labelledby="p-title">
+  <form id="pform" class="form" novalidate>
+    <div class="form-head">
+      <h2 id="p-title">Publica una actividad</h2>
+      <p class="sub">Gratis y para la comunidad. Por ahora se guarda solo en este navegador.</p>
+    </div>
+    <label class="lbl">Título
+      <input class="field" id="f-title" maxlength="80" required placeholder="Ej: Taller de huerta en terraza">
+    </label>
+    <div class="two">
+      <label class="lbl">Categoría
+        <select class="field" id="f-cat" required>
+          <option value="aprender">Aprender (clase o taller)</option>
+          <option value="social">Ayuda social (jornada solidaria)</option>
+          <option value="animales">Animales (protección animal)</option>
+        </select>
+      </label>
+      <label class="lbl">Quién organiza
+        <input class="field" id="f-host" maxlength="60" required placeholder="Tu nombre u organización">
+      </label>
+    </div>
+    <div class="two">
+      <label class="lbl">Fecha
+        <input class="field" id="f-date" type="date" required>
+      </label>
+      <label class="lbl">Hora
+        <input class="field" id="f-time" type="time" required value="10:00">
+      </label>
+    </div>
+    <div class="two">
+      <label class="lbl">Localidad
+        <select class="field" id="f-loc" required></select>
+      </label>
+      <label class="lbl">Cupos
+        <input class="field" id="f-total" type="number" min="1" max="500" required value="20" inputmode="numeric">
+      </label>
+    </div>
+    <label class="lbl">Lugar (nombre y barrio)
+      <input class="field" id="f-place" maxlength="90" required placeholder="Ej: Salón comunal, barrio El Retiro">
+    </label>
+    <div class="lbl">Ubicación en el mapa
+      <div id="pmap" class="pmap" role="application" aria-label="Mapa para marcar el lugar"></div>
+      <span class="sub" id="pmap-hint">Toca el mapa para marcar el lugar exacto.</span>
+    </div>
+    <label class="lbl">Descripción
+      <textarea class="field" id="f-desc" rows="4" maxlength="400" required placeholder="¿Qué se va a hacer? ¿Qué deben traer las personas?"></textarea>
+    </label>
+    <p class="err" id="p-err" role="alert" hidden></p>
+    <div class="d-actions">
+      <button type="submit" class="btn block">Publicar actividad</button>
+      <button type="button" class="btn ghost block" data-pubclose="1">Cancelar</button>
+    </div>
+  </form>
+</dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="js/config.js"></script>
+<script src="js/cloud.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

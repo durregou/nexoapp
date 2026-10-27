@@ -1,0 +1,37 @@
+{
+  "name": "NexoApp",
+  "short_name": "NexoApp",
+  "lang": "es-CO",
+  "description": "Clases, jornadas solidarias y protección animal gratis cerca de ti en Bogotá.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F1F4EE",
+  "theme_color": "#1F5C45",
+  "categories": [
+    "social",
+    "education",
+    "lifestyle"
+  ],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
