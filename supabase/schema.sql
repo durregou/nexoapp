@@ -205,7 +205,7 @@ grant execute on function public.delete_my_account() to authenticated;
 -- ───────── Mascotas perdidas y encontradas ─────────
 create table if not exists public.pets (
   id          bigint generated always as identity primary key,
-  owner       uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  owner       uuid default auth.uid() references auth.users(id) on delete cascade,   -- nulo solo en datos de ejemplo
   kind        text not null check (kind in ('perdido','encontrado')),
   species     text not null check (species in ('perro','gato','otro')),
   name        text check (name is null or char_length(name) between 1 and 40),
@@ -218,8 +218,12 @@ create table if not exists public.pets (
   photo_path  text check (photo_path is null or photo_path ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\.jpg$'),
   status      text not null default 'pending' check (status in ('pending','approved','rejected')),
   resolved    boolean not null default false,
+  expires_on  date not null default ((now() at time zone 'America/Bogota')::date + 60),   -- último día que se muestra
   created_at  timestamptz not null default now()
 );
+-- Para bases creadas antes de esta versión:
+alter table public.pets alter column owner drop not null;
+alter table public.pets add column if not exists expires_on date not null default ((now() at time zone 'America/Bogota')::date + 60);
 create index if not exists pets_status_idx  on public.pets (status, resolved, created_at desc);
 create index if not exists pets_owner_idx   on public.pets (owner);
 
@@ -258,23 +262,26 @@ grant select on public.pets to anon, authenticated;
 grant insert, update, delete on public.pets to authenticated;
 grant select, insert on public.pet_contacts to authenticated;
 
--- Al reportar: queda pendiente (salvo admin), la fecha no puede ser futura ni de hace más de 60 días,
--- la foto tiene que estar en la carpeta de quien reporta y máximo 5 reportes por día.
+-- Al reportar: queda pendiente (salvo admin), vence a los 60 días, la fecha no puede ser futura ni de
+-- hace más de 60 días, la foto tiene que estar en la carpeta de quien reporta y máximo 5 reportes por día.
 create or replace function public.before_pet() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare hoy date := (now() at time zone 'America/Bogota')::date;
 begin
-  new.owner    := auth.uid();
-  new.status   := case when public.is_admin() then 'approved' else 'pending' end;
-  new.resolved := false;
-  if new.seen_on > hoy or new.seen_on < hoy - 60 then
-    raise exception 'La fecha no puede ser futura ni de hace más de 60 días';
-  end if;
-  if new.photo_path is not null and split_part(new.photo_path, '/', 1) <> new.owner::text then
-    raise exception 'La foto no es válida';
-  end if;
-  if (select count(*) from public.pets where owner = new.owner and created_at > now() - interval '1 day') >= 5 then
-    raise exception 'Llegaste al límite de 5 reportes de mascotas por día';
+  if auth.uid() is not null then            -- el SQL Editor (datos de ejemplo) no pasa por aquí
+    new.owner      := auth.uid();
+    new.status     := case when public.is_admin() then 'approved' else 'pending' end;
+    new.resolved   := false;
+    new.expires_on := hoy + 60;             -- nadie puede alargar su propio vencimiento
+    if new.seen_on > hoy or new.seen_on < hoy - 60 then
+      raise exception 'La fecha no puede ser futura ni de hace más de 60 días';
+    end if;
+    if new.photo_path is not null and split_part(new.photo_path, '/', 1) <> new.owner::text then
+      raise exception 'La foto no es válida';
+    end if;
+    if (select count(*) from public.pets where owner = new.owner and created_at > now() - interval '1 day') >= 5 then
+      raise exception 'Llegaste al límite de 5 reportes de mascotas por día';
+    end if;
   end if;
   return new;
 end $$;

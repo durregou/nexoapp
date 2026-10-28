@@ -186,11 +186,10 @@
       if(r.error) fail(r.error);
     },
     /* ---- mascotas perdidas y encontradas ---- */
-    /* Reportes aprobados, sin resolver y de los últimos 60 días. */
+    /* Reportes aprobados, sin resolver y que aún no vencen (expires_on es el último día que se muestra). */
     async pets(userId){
-      var since = new Date(Date.now() - 60 * 864e5).toISOString();
       var r = await sb.from('pets').select('*').eq('status', 'approved').eq('resolved', false)
-        .gte('created_at', since).order('created_at', {ascending:false});
+        .gte('expires_on', today()).order('created_at', {ascending:false});
       if(r.error) fail(r.error);
       return r.data.map(function(x){ return petRow(x, userId); });
     },
