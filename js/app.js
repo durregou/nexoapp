@@ -861,7 +861,7 @@ $('ptform').addEventListener('submit', async ev => {
     $('petdlg').close(); state.busy = false;
     await reloadCloud();
     setPage(r.status === 'approved' ? 'pets' : 'profile');
-    toast(r.status === 'approved' ? 'Reporte publicado' : 'Enviado. Lo revisaremos y aparecerá en Mascotas cuando se apruebe.');
+    toast(r.status === 'approved' ? 'Reporte publicado' : 'Enviado. Lo revisaremos y aparecerá en Perdidos cuando se apruebe.');
   } catch(e){ bad(CLOUD.friendly(e)); }
   finally { state.busy = false; $('pt-send').disabled = false; }
 });
