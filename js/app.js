@@ -199,6 +199,7 @@ function openDetail(id){
       '<div><strong>' + esc(a.place) + '</strong><br><span>' + esc(a.loc) + ', Bogotá</span></div>' +
       '<div><strong>' + (full ? 'Cupos completos' : left(a) + ' cupos libres') + '</strong><br><span>' + count(a) + ' de ' + a.total + ' inscritos · Gratis</span></div></div>' +
       '<div class="bar" aria-hidden="true"><b style="width:' + Math.min(100, count(a) / a.total * 100) + '%"></b></div>' +
+      (safeLink(a.link) ? '<a class="btn ghost block" target="_blank" rel="noopener noreferrer nofollow" href="' + esc(safeLink(a.link)) + '">' + esc(linkLabel(safeLink(a.link), a.host)) + '</a>' : '') +
       '<div class="d-actions">' +
         '<button type="button" class="btn block" data-join="' + id + '"' + (full ? ' disabled' : '') + '>' + (j ? 'Cancelar mi inscripción' : full ? 'Sin cupos' : 'Inscribirme') + '</button>' +
         '<div class="d-share">' +
@@ -426,10 +427,12 @@ async function submitPublish(ev){
   if(desc.length < 5) return fail('Cuéntanos un poco más de la actividad: la descripción necesita al menos 5 caracteres.', $('f-desc'));
   const [[s0, w0], [n0, e0]] = CFG.BOUNDS;
   if(ppoint.lat < s0 || ppoint.lat > n0 || ppoint.lng < w0 || ppoint.lng > e0) return fail('El lugar debe estar dentro de Bogotá.', null);
+  const link = normLink($('f-link').value);
+  if(link === null) return fail('Escribe un enlace válido (por ejemplo https://instagram.com/tu_cuenta o @tu_cuenta) o déjalo vacío.', $('f-link'));
   let status = 'approved';
   let id = Math.max(1000, ...ACTS.map(a => a.id)) + 1;
   const a = {id:id, mine:true, cat:$('f-cat').value, title:title, host:host, loc:$('f-loc').value, place:place,
-    lat:+ppoint.lat.toFixed(5), lng:+ppoint.lng.toFixed(5), date:date, time:time, total:total, taken:0, desc:desc};
+    lat:+ppoint.lat.toFixed(5), lng:+ppoint.lng.toFixed(5), date:date, time:time, total:total, taken:0, desc:desc, link:link};
   if(CLOUD){
     state.busy = true;
     const btn = $('pform').querySelector('[type=submit]'); btn.disabled = true;
@@ -900,6 +903,38 @@ function renderHome(){
       '<p class="sub">Aún no te has inscrito a nada. Toca una actividad para unirte.</p>') + '</section>' +
     '<section class="panel-box" style="margin-top:16px"><h3>Ahora en NexoApp</h3><div class="stats3"><div><strong>' + up.length + '</strong><small>actividades</small></div><div><strong>' + free + '</strong><small>cupos libres</small></div><div><strong>' + LOCS.length + '</strong><small>localidades</small></div></div></section></aside></div></div>';
 }
+/* ---- enlace a las redes de quien organiza ---- */
+/* Acepta @usuario (se toma como Instagram), un enlace con o sin https://, y descarta cualquier otro
+   esquema (javascript:, mailto:, etc.). Devuelve '' si está vacío, null si no es válido. */
+function normLink(v){
+  v = (v || '').trim();
+  if(!v) return '';
+  if(v.startsWith('/')) return null;
+  if(/^@[A-Za-z0-9._]{1,30}$/.test(v)) return 'https://instagram.com/' + v.slice(1);
+  if(/^http:\/\//i.test(v)) v = 'https://' + v.slice(7);
+  else if(!/^https:\/\//i.test(v)){
+    if(/^[a-z][a-z0-9+.-]*:/i.test(v)) return null;
+    v = 'https://' + v;
+  }
+  if(!/^https:\/\/[^\s"'<>]{4,190}$/i.test(v)) return null;
+  try { if(!new URL(v).hostname.includes('.')) return null; } catch(e){ return null; }
+  return v;
+}
+/* Siempre se revisa al mostrarlo, venga de la base o del navegador. */
+const safeLink = u => (typeof u === 'string' && /^https:\/\/[^\s"'<>]{4,190}$/i.test(u)) ? u : '';
+function linkLabel(url, host){
+  let h = '';
+  try { h = new URL(url).hostname.replace(/^www\./, '').toLowerCase(); } catch(e){}
+  const de = host ? ' de ' + host : '';
+  if(/(^|\.)instagram\.com$/.test(h)) return 'Ver el Instagram' + de;
+  if(/(^|\.)facebook\.com$|(^|\.)fb\.com$|^fb\.me$/.test(h)) return 'Ver el Facebook' + de;
+  if(/(^|\.)tiktok\.com$/.test(h)) return 'Ver el TikTok' + de;
+  if(/(^|\.)youtube\.com$|^youtu\.be$/.test(h)) return 'Ver el canal' + de;
+  if(/(^|\.)(x|twitter)\.com$/.test(h)) return 'Ver el perfil en X' + de;
+  if(h === 'wa.me' || /(^|\.)whatsapp\.com$/.test(h)) return 'Escribir por WhatsApp';
+  return 'Ver redes o página' + de;
+}
+
 /* ---- compartir, calendario, enlace directo ---- */
 const shareUrl = id => location.href.split('#')[0] + '#a=' + id;
 const shareText = a => 'Mira esta actividad en NexoApp: ' + a.title + ' (' + when(a) + ', ' + a.loc + '). ' + shareUrl(a.id);
@@ -1012,6 +1047,7 @@ function adminCard(a){
     '<span class="meta">' + esc(when(a)) + ' · ' + esc(a.loc) + ' · ' + esc(a.place) + '</span>' +
     '<span class="meta">Organiza: ' + esc(a.host) + ' · ' + a.total + ' cupos</span>' +
     '<span class="adm-desc">' + esc(a.desc) + '</span>' + map +
+    (safeLink(a.link) ? '<a class="link" style="overflow-wrap:anywhere" target="_blank" rel="noopener noreferrer nofollow" href="' + esc(safeLink(a.link)) + '">Enlace del organizador: ' + esc(safeLink(a.link)) + '</a>' : '') +
     '<span class="adm-btns"><button type="button" class="btn" data-approve="' + a.id + '">Aprobar</button>' +
     '<button type="button" class="btn ghost" data-reject="' + a.id + '">Rechazar</button></span></span></article>';
 }

@@ -138,3 +138,9 @@ Corre en **GitHub Actions** (gratis) y no dentro de Supabase porque borrar un ar
 
 **Cuidado con la llave de servicio:** da acceso total a tu base de datos. Ponla solo como *secret* de GitHub; nunca en el código, en el chat ni en la página. Si se filtra, genera una nueva en Supabase y reemplaza el secret.
 GitHub pausa las tareas programadas de un repositorio sin actividad durante 60 días: te avisa por correo y se reactivan con cualquier cambio o con «Enable workflow».
+
+## Redes o página de quien organiza
+Al publicar una actividad hay un campo opcional «Redes o página de quien organiza». Acepta `@usuario` (se toma como Instagram), un enlace con o sin `https://`, y descarta cualquier otra cosa (`javascript:`, `mailto:`, etc.). En el detalle de la actividad aparece un botón con el nombre de la red: «Ver el Instagram de …», «Ver el Facebook de …», «Escribir por WhatsApp» o «Ver redes o página de …». El enlace se abre en pestaña nueva y también lo ves al revisar la publicación en el panel de admin.
+- La base solo acepta enlaces que empiecen por `https://`, sin espacios y de máximo 200 caracteres.
+- Para activarlo corre `schema.sql` completo otra vez (agrega la columna `host_link`). Mientras no lo corras, publicar sin enlace sigue funcionando; con enlace daría error.
+- Las actividades de ejemplo no tienen enlace (no inventamos cuentas que podrían ser de personas reales).

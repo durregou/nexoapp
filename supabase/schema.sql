@@ -19,11 +19,15 @@ create table if not exists public.activities (
   base_taken  int  not null default 0 check (base_taken >= 0),   -- solo para datos de ejemplo
   description text not null check (char_length(description) between 5 and 400),
   status      text not null default 'pending' check (status in ('pending','approved','rejected')),
+  host_link   text check (host_link is null or host_link ~ '^https://[^[:space:]]{4,190}$'),   -- redes o página de quien organiza (solo https)
   created_at  timestamptz not null default now()
 );
 -- Para bases creadas antes de la moderación (si la tabla ya existía sin "status"):
 alter table public.activities
   add column if not exists status text not null default 'pending' check (status in ('pending','approved','rejected'));
+-- Para bases creadas antes del enlace de quien organiza:
+alter table public.activities add column if not exists host_link text
+  check (host_link is null or host_link ~ '^https://[^[:space:]]{4,190}$');
 create index if not exists activities_date_idx   on public.activities (date);
 create index if not exists activities_owner_idx  on public.activities (owner);
 create index if not exists activities_status_idx on public.activities (status);

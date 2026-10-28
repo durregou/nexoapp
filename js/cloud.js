@@ -14,7 +14,7 @@
   }
   function rowToAct(r, userId, taken){
     return {id:r.id, cat:r.cat, title:r.title, host:r.host, loc:r.loc, place:r.place, lat:r.lat, lng:r.lng,
-      date:r.date, time:String(r.time).slice(0,5), total:r.total, desc:r.description, status:r.status,
+      date:r.date, time:String(r.time).slice(0,5), total:r.total, desc:r.description, status:r.status, link:r.host_link || '',
       taken:taken, mine:!!userId && r.owner === userId};
   }
   var BUCKET = 'pet-photos';
@@ -39,6 +39,7 @@
         activities_place_check:'El lugar debe tener entre 2 y 90 caracteres.',
         activities_description_check:'La descripción debe tener entre 5 y 400 caracteres.',
         activities_total_check:'Los cupos deben estar entre 1 y 500.',
+        activities_host_link_check:'El enlace debe empezar con https:// , no tener espacios y medir máximo 200 caracteres.',
         activities_lat_check:'El lugar debe estar dentro de Bogotá.',
         activities_lng_check:'El lugar debe estar dentro de Bogotá.',
         activities_loc_check:'Elige una localidad de la lista.',
@@ -143,8 +144,10 @@
     async join(id){ var r = await sb.from('registrations').insert({activity_id:id}); if(r.error) fail(r.error); },
     async leave(id){ var r = await sb.from('registrations').delete().eq('activity_id', id); if(r.error) fail(r.error); },
     async create(a){
-      var r = await sb.from('activities').insert({cat:a.cat, title:a.title, host:a.host, loc:a.loc, place:a.place,
-        lat:a.lat, lng:a.lng, date:a.date, time:a.time, total:a.total, description:a.desc}).select().single();
+      var row = {cat:a.cat, title:a.title, host:a.host, loc:a.loc, place:a.place,
+        lat:a.lat, lng:a.lng, date:a.date, time:a.time, total:a.total, description:a.desc};
+      if(a.link) row.host_link = a.link;   // solo si hay enlace: así publicar sin él funciona aunque falte la columna
+      var r = await sb.from('activities').insert(row).select().single();
       if(r.error) fail(r.error);
       return {id:r.data.id, status:r.data.status};
     },
