@@ -239,7 +239,7 @@ function locate(){
 
 /* ---- eventos ---- */
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-id],[data-cat],[data-open],[data-join],[data-close],[data-view],[data-when],[data-pub],[data-pubclose],[data-del],[data-page]:not(body),[data-login],[data-loginclose],[data-logout],[data-editname],[data-nameclose],[data-approve],[data-reject],[data-ics],[data-copy],[data-report],[data-reportclose],[data-dismiss],[data-install]');
+  const t = e.target.closest('[data-id],[data-cat],[data-open],[data-join],[data-close],[data-view],[data-when],[data-pub],[data-pubclose],[data-del],[data-page]:not(body),[data-login],[data-loginclose],[data-logout],[data-editname],[data-nameclose],[data-approve],[data-reject],[data-ics],[data-copy],[data-report],[data-reportclose],[data-dismiss],[data-install],[data-lmode],[data-forgot],[data-showpw],[data-passclose],[data-delclose],[data-chpass],[data-delacct],[data-signup]');
   if(!t) return;
   if(t.dataset.page){
     if(t.dataset.setcat){ state.cat = t.dataset.setcat; state.when = 'todas'; }
@@ -259,6 +259,14 @@ document.addEventListener('click', e => {
   else if(t.dataset.join){ toggleJoin(+t.dataset.join); }
   else if(t.dataset.login){ openLogin(); }
   else if(t.dataset.loginclose){ $('login').close(); }
+  else if(t.dataset.signup){ openLogin(null, 'up'); }
+  else if(t.dataset.lmode){ setLoginMode(t.dataset.lmode); }
+  else if(t.dataset.forgot){ setLoginMode('reset'); }
+  else if(t.dataset.showpw){ const f = $(t.dataset.showpw); f.type = f.type === 'password' ? 'text' : 'password'; t.textContent = f.type === 'password' ? 'Ver' : 'Ocultar'; }
+  else if(t.dataset.passclose){ $('passdlg').close(); }
+  else if(t.dataset.delclose){ $('deldlg').close(); }
+  else if(t.dataset.chpass){ openNewPass(false); }
+  else if(t.dataset.delacct){ openDelete(); }
   else if(t.dataset.ics){ downloadIcs(+t.dataset.ics); }
   else if(t.dataset.copy){ copyLink(+t.dataset.copy); }
   else if(t.dataset.report){ openReport(+t.dataset.report); }
@@ -461,31 +469,117 @@ async function toggleJoin(id){
   else { state.joined.add(id); toast('Listo, quedaste inscrito'); }
   saveJoined(); render(false); openDetail(id);
 }
-function openLogin(msg){
+let loginMode = 'in';
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PW_OK = p => p.length >= 8 && p.length <= 72 && /[A-Za-z]/.test(p) && /\d/.test(p);
+const PW_MSG = 'La contraseña debe tener entre 8 y 72 caracteres, con letras y números.';
+function setLoginMode(mode){
+  loginMode = mode;
+  const up = mode === 'up', re = mode === 'reset';
+  $('l-modes').hidden = re;
+  document.querySelectorAll('#l-modes [data-lmode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lmode === mode)));
+  $('l-names').hidden = !up; $('l-termsrow').hidden = !up; $('l-passrow').hidden = re;
+  $('l-passhint').hidden = !up; $('l-forgot').hidden = mode !== 'in'; $('l-back').hidden = !re;
+  $('l-title').textContent = re ? 'Recupera tu contraseña' : up ? 'Crea tu cuenta' : 'Entra a NexoApp';
+  $('l-sub').textContent = re ? 'Escribe tu correo y te enviamos un enlace para crear una nueva contraseña.' : up ? 'Gratis y para la comunidad de Bogotá.' : 'Con tu correo y tu contraseña.';
+  $('l-send').textContent = re ? 'Enviarme el enlace' : up ? 'Crear cuenta' : 'Entrar';
+  $('l-pass').autocomplete = up ? 'new-password' : 'current-password';
+  $('l-err').hidden = true; $('l-ok').hidden = true;
+}
+function showDialog(id){
+  const d = $(id);
+  if(typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+}
+function openLogin(msg, mode){
   if(!CLOUD) return;
   if($('detail').open) $('detail').close();
-  $('l-err').hidden = true; $('l-ok').hidden = true;
+  setLoginMode(mode || 'in');
+  $('l-pass').value = ''; $('l-pass').type = 'password';
   if(msg){ const o = $('l-ok'); o.textContent = msg; o.hidden = false; }
-  const d = $('login');
-  if(typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+  showDialog('login');
   $('l-email').focus();
 }
 $('lform').addEventListener('submit', async ev => {
   ev.preventDefault();
   if(!CLOUD || state.busy) return;
-  const email = $('l-email').value.trim(), err = $('l-err'), ok = $('l-ok');
+  const email = $('l-email').value.trim(), pass = $('l-pass').value, err = $('l-err'), ok = $('l-ok');
   err.hidden = true; ok.hidden = true;
-  if(!$('l-terms').checked){ err.textContent = 'Para continuar debes aceptar los Términos y la Política de privacidad.'; err.hidden = false; $('l-terms').focus(); return; }
-  const names = readNames('l-first', 'l-last');
-  if(!names){ err.textContent = 'Escribe tu nombre y apellido (solo letras, mínimo 2).'; err.hidden = false; $('l-first').focus(); return; }
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ err.textContent = 'Escribe un correo válido.'; err.hidden = false; $('l-email').focus(); return; }
+  const bad = (m, el) => { err.textContent = m; err.hidden = false; if(el) el.focus(); };
+  if(!EMAIL_RE.test(email)) return bad('Escribe un correo válido.', $('l-email'));
+  let names = null;
+  if(loginMode === 'up'){
+    names = readNames('l-first', 'l-last');
+    if(!names) return bad('Escribe tu nombre y apellido (solo letras, mínimo 2).', $('l-first'));
+    if(!PW_OK(pass)) return bad(PW_MSG, $('l-pass'));
+    if(!$('l-terms').checked) return bad('Para continuar debes aceptar los Términos y la Política de privacidad.', $('l-terms'));
+  } else if(loginMode === 'in' && !pass) return bad('Escribe tu contraseña.', $('l-pass'));
   state.busy = true; $('l-send').disabled = true;
   try {
-    try { localStorage.setItem('nexo-pending-name', JSON.stringify(names)); } catch(e){}
-    await CLOUD.signIn(email, names);
-    ok.textContent = 'Listo. Revisa tu correo (y la carpeta de spam) y toca el enlace para entrar.'; ok.hidden = false;
-  } catch(e){ err.textContent = CLOUD.friendly(e); err.hidden = false; }
+    if(loginMode === 'reset'){
+      await CLOUD.resetPassword(email);
+      ok.textContent = 'Si ese correo tiene una cuenta, te enviamos un enlace para crear una nueva contraseña. Revisa también el spam.'; ok.hidden = false;
+    } else if(loginMode === 'up'){
+      const r = await CLOUD.signUp(email, pass, names);
+      if(!r.signedIn){
+        ok.textContent = 'Te enviamos un correo para confirmar tu cuenta. Ábrelo, toca el enlace y luego entra. Si ya tenías una cuenta, usa «Entrar».'; ok.hidden = false;
+        $('l-pass').value = '';
+      }
+    } else {
+      await CLOUD.signIn(email, pass);   /* al entrar, el evento de sesión cierra esta ventana */
+    }
+  } catch(e){ bad(CLOUD.friendly(e)); }
   finally { state.busy = false; $('l-send').disabled = false; }
+});
+
+/* ---- cambiar contraseña (también al llegar desde el enlace de «olvidé mi contraseña») ---- */
+function openNewPass(recovery){
+  if(!CLOUD) return;
+  if($('login').open) $('login').close();
+  $('np-title').textContent = recovery ? 'Crea tu nueva contraseña' : 'Cambiar contraseña';
+  $('np-1').value = ''; $('np-2').value = ''; $('np-err').hidden = true;
+  $('np-1').type = 'password';
+  showDialog('passdlg');
+  $('np-1').focus();
+}
+$('npform').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  if(!CLOUD || state.busy) return;
+  const a = $('np-1').value, b = $('np-2').value, err = $('np-err');
+  const bad = m => { err.textContent = m; err.hidden = false; };
+  err.hidden = true;
+  if(!PW_OK(a)) return bad(PW_MSG);
+  if(a !== b) return bad('Las dos contraseñas no coinciden.');
+  state.busy = true; $('np-save').disabled = true;
+  try { await CLOUD.setPassword(a); $('passdlg').close(); toast('Contraseña actualizada'); }
+  catch(e){ bad(CLOUD.friendly(e)); }
+  finally { state.busy = false; $('np-save').disabled = false; }
+});
+
+/* ---- eliminar mi cuenta ---- */
+function openDelete(){
+  if(!CLOUD || !state.authUser) return;
+  $('x-pass').value = ''; $('x-word').value = ''; $('x-err').hidden = true; $('x-pass').type = 'password';
+  showDialog('deldlg');
+  $('x-pass').focus();
+}
+$('dform').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  if(!CLOUD || !state.authUser || state.busy) return;
+  const err = $('x-err'), bad = m => { err.textContent = m; err.hidden = false; };
+  err.hidden = true;
+  if(!$('x-pass').value) return bad('Escribe tu contraseña.');
+  if($('x-word').value.trim().toUpperCase() !== 'ELIMINAR') return bad('Escribe la palabra ELIMINAR para confirmar.');
+  state.busy = true; $('x-go').disabled = true;
+  try {
+    await CLOUD.deleteAccount(state.authUser.email, $('x-pass').value);
+    $('deldlg').close();
+    Object.assign(state, {authUser:null, isAdmin:false, myPubs:[], pending:[], reports:[], joined:new Set()});
+    setPage('home');
+    state.busy = false;
+    await reloadCloud();
+    toast('Tu cuenta y tus datos fueron eliminados.');
+  } catch(e){ bad(CLOUD.friendly(e)); }
+  finally { state.busy = false; $('x-go').disabled = false; }
 });
 
 function openNameDlg(){
@@ -509,16 +603,6 @@ $('nform').addEventListener('submit', async ev => {
   } catch(e){ err.textContent = CLOUD.friendly(e); err.hidden = false; }
   finally { state.busy = false; $('n-save').disabled = false; }
 });
-/* si la persona ya tenía cuenta, el nombre que escribió al pedir el enlace se guarda al entrar */
-function applyPendingName(u){
-  if(!u) return;
-  let p = null;
-  try { p = JSON.parse(localStorage.getItem('nexo-pending-name') || 'null'); localStorage.removeItem('nexo-pending-name'); } catch(e){}
-  if(p && !u.first && NAME_RE.test(p.first || '') && NAME_RE.test(p.last || '')){
-    CLOUD.updateName(p).then(() => { state.authUser = Object.assign({}, state.authUser, p); renderHome(); renderProfile(); }).catch(() => {});
-  }
-}
-
 /* ---- navegación entre Inicio, Explorar y Perfil ---- */
 const ICON_USER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>';
 function setPage(page, silent){
@@ -725,9 +809,14 @@ async function moderate(id, status){
 }
 function accountHtml(){
   if(!CLOUD) return '';
-  return state.authUser ?
-    '<div class="acct"><span class="sub">' + esc(state.authUser.email) + '</span>' + '<button type="button" class="btn' + (state.authUser.first ? ' ghost' : '') + '" data-editname="1">' + (state.authUser.first ? 'Editar nombre' : 'Agregar mi nombre') + '</button><button type="button" class="btn ghost" data-logout="1">Cerrar sesión</button></div>' :
-    '<div class="acct"><span class="sub">Entra para inscribirte y publicar.</span><button type="button" class="btn" data-login="1">Iniciar sesión</button></div>';
+  const u = state.authUser;
+  return u ?
+    '<div class="acct"><span class="sub">' + esc(u.email) + '</span>' +
+      '<button type="button" class="btn' + (u.first ? ' ghost' : '') + '" data-editname="1">' + (u.first ? 'Editar nombre' : 'Agregar mi nombre') + '</button>' +
+      '<button type="button" class="btn ghost" data-chpass="1">Cambiar contraseña</button>' +
+      '<button type="button" class="btn ghost" data-logout="1">Cerrar sesión</button>' +
+      '<button type="button" class="btn ghost danger" data-delacct="1">Eliminar mi cuenta</button></div>' :
+    '<div class="acct"><span class="sub">Entra para inscribirte y publicar.</span><button type="button" class="btn" data-login="1">Iniciar sesión</button><button type="button" class="btn ghost" data-signup="1">Crear cuenta</button></div>';
 }
 function renderProfile(){
   const mine = myJoined(), pub = (CLOUD ? state.myPubs.slice() : ACTS.filter(a => a.mine)).sort((x, y) => (x.date + x.time).localeCompare(y.date + y.time));
@@ -751,10 +840,9 @@ if(CLOUD){
   CLOUD.onAuth(u => {
     const changed = (u && u.id) !== (state.authUser && state.authUser.id);
     state.authUser = u;
-    applyPendingName(u);
     if(changed){ if(u && $('login').open) $('login').close(); reloadCloud(); }
     else { renderHome(); renderProfile(); }
-  });
+  }, () => openNewPass(true));
 } else {
   loadMine().forEach(a => ACTS.push(a));
   render(false);

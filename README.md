@@ -9,7 +9,8 @@ Plataforma gratuita para Bogotá donde las personas comparten conocimiento, se u
 - Mapa de OpenStreetMap con [Leaflet](https://leafletjs.com/), pines por categoría y agrupación de pines cercanos.
 - Filtros por categoría, localidad, fecha (hoy, esta semana, fin de semana, este mes) y texto, y botón **Cerca de mí** (la ubicación nunca sale del navegador).
 - Navegación Inicio, Explorar, Perfil y Publicar: barra lateral en escritorio y barra inferior en celular.
-- Cuentas con enlace al correo (sin contraseñas), con nombre y apellido.
+- Cuentas con correo y contraseña (con confirmación por correo y recuperación de contraseña), con nombre y apellido.
+- Eliminar la propia cuenta desde el Perfil (borra la cuenta, las inscripciones y lo publicado).
 - Publicar actividades eligiendo el lugar en un mapa. Cada publicación pasa por **revisión de un administrador** antes de mostrarse.
 - Panel de administración: aprobar, rechazar, atender reportes y quitar actividades.
 - Reportar actividades (con 3 reportes distintos se ocultan solas).

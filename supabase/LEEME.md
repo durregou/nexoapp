@@ -82,3 +82,25 @@ select id from auth.users where email = 'otra.persona@ejemplo.com' on conflict d
 
 ## Antes de abrir al público: páginas legales
 `terminos.html` y `privacidad.html` son un **borrador**. Reemplaza los textos resaltados en amarillo (`[NOMBRE COMPLETO O RAZÓN SOCIAL]`, `[CIUDAD, COLOMBIA]`, `[CORREO DE CONTACTO]`) y pide que una persona abogada los revise. Si cambias el contenido de forma importante, sube `terms_version` en `js/cloud.js` para registrar la nueva aceptación.
+
+## Cuentas con correo y contraseña
+La app ya no usa enlaces mágicos: la gente se registra con nombre, apellido, correo y contraseña (mínimo 8 caracteres, con letras y números), y puede recuperar o cambiar su contraseña.
+
+**Ajustes en Supabase** (Authentication → Sign In / Providers → Email):
+1. **Email** debe estar activado.
+2. **Confirm email**: recomendado activado. Quien se registra recibe un correo y confirma antes de poder entrar.
+3. **Minimum password length**: pon 8. Si tu plan lo permite, exige también letras y números.
+
+**Importante, los envíos de correo:** con el servicio de correo gratuito de Supabase hay un tope muy bajo (unos pocos correos por hora en todo el proyecto). Cada registro con confirmación y cada «olvidé mi contraseña» gastan uno. Para un piloto con varias personas necesitas un SMTP propio (Authentication → SMTP Settings). Mientras tanto, para probar puedes desactivar *Confirm email*, sabiendo que así cualquiera puede registrarse con un correo que no es suyo.
+
+**Plantillas de correo** (cuando tengas SMTP propio, en Authentication → Emails):
+| Plantilla en Supabase | Archivo |
+|---|---|
+| Confirm sign up | `email-confirmar-registro.html` |
+| Reset Password | `email-recuperar-contrasena.html` |
+| Magic Link | ya no se usa |
+
+**Quienes ya tenían cuenta por enlace** no tienen contraseña: pueden crearla con «¿Olvidaste tu contraseña?» en la pantalla de entrada, o con **Perfil → Cambiar contraseña** si todavía tienen la sesión abierta.
+
+## Eliminar la cuenta
+En **Perfil → Eliminar mi cuenta** la persona escribe su contraseña y la palabra ELIMINAR. Se borran su cuenta, sus inscripciones, sus reportes y las actividades que publicó (con las inscripciones de otras personas en ellas). Para que funcione, corre `schema.sql` completo otra vez: crea la función `delete_my_account()`.

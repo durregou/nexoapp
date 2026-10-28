@@ -279,3 +279,16 @@ body[data-page="admin"] #admin{display:block}
 .rep-list{margin:4px 0 0;padding-left:18px;font-size:13px;color:var(--muted)}
 .sec-sub{margin:22px 0 10px;font-size:20px;font-weight:800}
 a.btn{text-decoration:none}
+
+/* cuenta con contraseña */
+.modes{display:flex;background:var(--bg);border:1.5px solid var(--line);border-radius:12px;padding:3px}
+.modes button{flex:1;border:0;background:none;min-height:40px;border-radius:9px;font-weight:600;color:var(--muted)}
+.modes button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.pw{position:relative}
+.pw .field{padding-right:68px}
+.pwtoggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;color:var(--brand);font-weight:700;font-size:14px;padding:8px 10px;min-height:36px}
+.btn.danger{background:#B3261E;color:#fff}
+.btn.ghost.danger{background:transparent;color:#B3261E;border:1.5px solid #B3261E}
+@media (prefers-color-scheme:dark){.btn.danger{background:#E5584F;color:#1a0503}.btn.ghost.danger{background:transparent;color:#FF8A82;border-color:#FF8A82}}
+.warn-list{margin:0;padding-left:20px;font-size:14px;line-height:1.5}
+.warn-list li{margin:4px 0}

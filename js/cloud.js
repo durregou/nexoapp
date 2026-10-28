@@ -24,11 +24,17 @@
   function friendly(err){
     var m = (err && err.message) || '';
     if(/cupos completos/i.test(m)) return 'Los cupos se acaban de llenar.';
+    if(/invalid login credentials/i.test(m)) return 'Correo o contraseña incorrectos.';
+    if(/email not confirmed/i.test(m)) return 'Aún no confirmas tu correo. Revisa tu bandeja de entrada (y el spam).';
+    if(/already registered|already been registered/i.test(m)) return 'Ese correo ya tiene una cuenta. Inicia sesión.';
+    if(/weak_password|password should|at least \d+ char/i.test(m + (err.code || ''))) return 'La contraseña es muy débil. Usa mínimo 8 caracteres con letras y números.';
+    if(/different from the old|same_password/i.test(m + (err.code || ''))) return 'La nueva contraseña debe ser distinta a la anterior.';
+    if(/contraseña incorrecta/i.test(m)) return m;
     if(/reports_activity_id_reporter_key/i.test(m)) return 'Ya reportaste esta actividad. Gracias.';
     if(/duplicate key|23505/i.test(m + (err.code || ''))) return 'Ya estás inscrito en esta actividad.';
     if(/futuras|límite de|permiso|no está disponible/i.test(m)) return m;
     if(/row-level security|jwt|not authenticated/i.test(m)) return 'Inicia sesión para continuar.';
-    if(/rate limit|security purposes/i.test(m)) return 'Espera un momento antes de pedir otro enlace.';
+    if(/rate limit|security purposes/i.test(m)) return 'Se enviaron demasiados correos o intentos. Espera un momento y vuelve a intentarlo.';
     if(/fetch|network/i.test(m)) return 'No hay conexión. Intenta de nuevo.';
     return 'Algo salió mal. Intenta de nuevo.';
   }
@@ -41,19 +47,41 @@
       var r = await sb.auth.getSession();
       return userOf(r.data && r.data.session && r.data.session.user);
     },
-    onAuth(cb){
-      sb.auth.onAuthStateChange(function(_evt, session){
+    onAuth(cb, onRecovery){
+      sb.auth.onAuthStateChange(function(evt, session){
+        if(evt === 'PASSWORD_RECOVERY' && onRecovery) onRecovery();
         cb(userOf(session && session.user));
       });
     },
-    /* Los nombres viajan como metadatos: el correo los puede usar ({{ .Data.first_name }})
-       y quedan guardados en la cuenta al crearla. */
-    async signIn(email, names){
-      var r = await sb.auth.signInWithOtp({email:email, options:{
+    /* Cuenta con correo y contraseña. Los nombres y la aceptación de los términos viajan como
+       metadatos y quedan guardados en la cuenta. */
+    async signUp(email, password, names){
+      var r = await sb.auth.signUp({email:email, password:password, options:{
         emailRedirectTo:location.origin + location.pathname,
         data:{first_name:names.first, last_name:names.last, full_name:names.first + ' ' + names.last,
           terms_version:'2026-10', terms_accepted_at:new Date().toISOString()}}});
       if(r.error) fail(r.error);
+      return {signedIn:!!r.data.session};   // false si Supabase exige confirmar el correo
+    },
+    async signIn(email, password){
+      var r = await sb.auth.signInWithPassword({email:email, password:password});
+      if(r.error) fail(r.error);
+    },
+    async resetPassword(email){
+      var r = await sb.auth.resetPasswordForEmail(email, {redirectTo:location.origin + location.pathname});
+      if(r.error) fail(r.error);
+    },
+    async setPassword(password){
+      var r = await sb.auth.updateUser({password:password});
+      if(r.error) fail(r.error);
+    },
+    /* Pide la contraseña otra vez antes de borrar, por si alguien deja la sesión abierta. */
+    async deleteAccount(email, password){
+      var v = await sb.auth.signInWithPassword({email:email, password:password});
+      if(v.error) fail({message:'Contraseña incorrecta.'});
+      var r = await sb.rpc('delete_my_account');
+      if(r.error) fail(r.error);
+      try { await sb.auth.signOut({scope:'local'}); } catch(e){}
     },
     async updateName(names){
       var r = await sb.auth.updateUser({data:{first_name:names.first, last_name:names.last, full_name:names.first + ' ' + names.last}});

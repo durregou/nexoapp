@@ -85,27 +85,94 @@
   <form id="lform" class="form" novalidate>
     <div class="form-head">
       <h2 id="l-title">Entra a NexoApp</h2>
-      <p class="sub">Te enviamos un enlace a tu correo. Sin contraseñas.</p>
+      <p class="sub" id="l-sub">Con tu correo y tu contraseña.</p>
     </div>
-    <div class="two">
+    <div class="modes" id="l-modes" role="group" aria-label="Entrar o crear cuenta">
+      <button type="button" data-lmode="in" aria-pressed="true">Entrar</button>
+      <button type="button" data-lmode="up" aria-pressed="false">Crear cuenta</button>
+    </div>
+    <div class="two" id="l-names" hidden>
       <label class="lbl">Nombre
-        <input class="field" id="l-first" autocomplete="given-name" maxlength="40" required placeholder="Laura">
+        <input class="field" id="l-first" autocomplete="given-name" maxlength="40" placeholder="Laura">
       </label>
       <label class="lbl">Apellido
-        <input class="field" id="l-last" autocomplete="family-name" maxlength="40" required placeholder="Méndez">
+        <input class="field" id="l-last" autocomplete="family-name" maxlength="40" placeholder="Méndez">
       </label>
     </div>
     <label class="lbl">Correo electrónico
-      <input class="field" id="l-email" type="email" autocomplete="email" inputmode="email" maxlength="120" required placeholder="tucorreo@ejemplo.com">
+      <input class="field" id="l-email" type="email" autocomplete="email" inputmode="email" maxlength="120" placeholder="tucorreo@ejemplo.com">
     </label>
-    <label class="chk"><input type="checkbox" id="l-terms" required>
+    <div class="lbl" id="l-passrow">
+      <label for="l-pass">Contraseña</label>
+      <div class="pw">
+        <input class="field" id="l-pass" type="password" autocomplete="current-password" maxlength="72">
+        <button type="button" class="pwtoggle" data-showpw="l-pass" aria-label="Mostrar u ocultar la contraseña">Ver</button>
+      </div>
+      <span class="sub" id="l-passhint" hidden>Mínimo 8 caracteres, con letras y números.</span>
+    </div>
+    <label class="chk" id="l-termsrow" hidden><input type="checkbox" id="l-terms">
       <span>Acepto los <a href="terminos.html" target="_blank" rel="noopener">Términos de uso</a> y la <a href="privacidad.html" target="_blank" rel="noopener">Política de privacidad</a>.</span>
     </label>
+    <button type="button" class="reportlink" data-forgot="1" id="l-forgot">¿Olvidaste tu contraseña?</button>
     <p class="err" id="l-err" role="alert" hidden></p>
     <p class="ok" id="l-ok" role="status" hidden></p>
     <div class="d-actions">
-      <button type="submit" class="btn block" id="l-send">Enviarme el enlace</button>
+      <button type="submit" class="btn block" id="l-send">Entrar</button>
+      <button type="button" class="btn ghost block" data-lmode="in" id="l-back" hidden>Volver a entrar</button>
       <button type="button" class="btn ghost block" data-loginclose="1">Cerrar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="passdlg" aria-labelledby="np-title">
+  <form id="npform" class="form" novalidate>
+    <div class="form-head">
+      <h2 id="np-title">Nueva contraseña</h2>
+      <p class="sub">Mínimo 8 caracteres, con letras y números.</p>
+    </div>
+    <div class="lbl">
+      <label for="np-1">Nueva contraseña</label>
+      <div class="pw">
+        <input class="field" id="np-1" type="password" autocomplete="new-password" maxlength="72">
+        <button type="button" class="pwtoggle" data-showpw="np-1" aria-label="Mostrar u ocultar la contraseña">Ver</button>
+      </div>
+    </div>
+    <label class="lbl">Repítela
+      <input class="field" id="np-2" type="password" autocomplete="new-password" maxlength="72">
+    </label>
+    <p class="err" id="np-err" role="alert" hidden></p>
+    <div class="d-actions">
+      <button type="submit" class="btn block" id="np-save">Guardar contraseña</button>
+      <button type="button" class="btn ghost block" data-passclose="1">Cancelar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="deldlg" aria-labelledby="x-title">
+  <form id="dform" class="form" novalidate>
+    <div class="form-head">
+      <h2 id="x-title">Eliminar mi cuenta</h2>
+      <p class="sub">Esta acción no se puede deshacer.</p>
+    </div>
+    <ul class="warn-list">
+      <li>Se borran tu cuenta, tu nombre y tu correo.</li>
+      <li>Se cancelan todas tus inscripciones.</li>
+      <li>Se eliminan las actividades que publicaste, incluidas las ya aprobadas, y las inscripciones de otras personas en ellas.</li>
+    </ul>
+    <div class="lbl">
+      <label for="x-pass">Tu contraseña</label>
+      <div class="pw">
+        <input class="field" id="x-pass" type="password" autocomplete="current-password" maxlength="72">
+        <button type="button" class="pwtoggle" data-showpw="x-pass" aria-label="Mostrar u ocultar la contraseña">Ver</button>
+      </div>
+    </div>
+    <label class="lbl">Para confirmar, escribe ELIMINAR
+      <input class="field" id="x-word" autocomplete="off" autocapitalize="characters" maxlength="10" placeholder="ELIMINAR">
+    </label>
+    <p class="err" id="x-err" role="alert" hidden></p>
+    <div class="d-actions">
+      <button type="submit" class="btn danger block" id="x-go">Eliminar mi cuenta para siempre</button>
+      <button type="button" class="btn ghost block" data-delclose="1">Cancelar</button>
     </div>
   </form>
 </dialog>

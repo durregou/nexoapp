@@ -187,3 +187,17 @@ end $$;
 drop trigger if exists after_report on public.reports;
 create trigger after_report after insert on public.reports
   for each row execute function public.after_report();
+
+-- ───────── Eliminar mi cuenta ─────────
+-- Cada persona puede borrar su propia cuenta desde la app (el navegador no puede borrar usuarios por sí solo).
+-- Borra: sus actividades publicadas (y con ellas las inscripciones y reportes de esas actividades),
+-- y luego su usuario (lo que arrastra sus inscripciones, sus reportes y, si lo era, su permiso de admin).
+create or replace function public.delete_my_account() returns void
+language plpgsql security definer set search_path = public, auth as $$
+begin
+  if auth.uid() is null then raise exception 'No hay una sesión iniciada'; end if;
+  delete from public.activities where owner = auth.uid();
+  delete from auth.users where id = auth.uid();
+end $$;
+revoke all on function public.delete_my_account() from public, anon;
+grant execute on function public.delete_my_account() to authenticated;
