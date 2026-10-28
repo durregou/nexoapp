@@ -15,6 +15,7 @@ Plataforma gratuita para Bogotá donde las personas comparten conocimiento, se u
 - Panel de administración: aprobar, rechazar, atender reportes y quitar actividades.
 - Reportar actividades (con 3 reportes distintos se ocultan solas).
 - Compartir por WhatsApp o enlace directo, y agregar al calendario (.ics).
+- Mascotas perdidas y encontradas, con foto (se guarda en Supabase Storage), contacto por WhatsApp solo para quien inicia sesión, moderación y botón «Ya apareció».
 - Instalable como app (PWA).
 - Términos de uso y política de privacidad (borradores por completar).
 

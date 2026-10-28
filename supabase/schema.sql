@@ -201,3 +201,110 @@ begin
 end $$;
 revoke all on function public.delete_my_account() from public, anon;
 grant execute on function public.delete_my_account() to authenticated;
+
+-- ───────── Mascotas perdidas y encontradas ─────────
+create table if not exists public.pets (
+  id          bigint generated always as identity primary key,
+  owner       uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  kind        text not null check (kind in ('perdido','encontrado')),
+  species     text not null check (species in ('perro','gato','otro')),
+  name        text check (name is null or char_length(name) between 1 and 40),
+  description text not null check (char_length(description) between 5 and 400),
+  loc         text not null check (loc in ('Usaquén','Chapinero','Suba','Engativá','Teusaquillo','La Candelaria','Kennedy','Bosa','Ciudad Bolívar')),
+  place       text not null check (char_length(place) between 2 and 90),
+  lat         double precision not null check (lat between 4.40 and 4.95),
+  lng         double precision not null check (lng between -74.35 and -73.95),
+  seen_on     date not null,
+  photo_path  text check (photo_path is null or photo_path ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\.jpg$'),
+  status      text not null default 'pending' check (status in ('pending','approved','rejected')),
+  resolved    boolean not null default false,
+  created_at  timestamptz not null default now()
+);
+create index if not exists pets_status_idx  on public.pets (status, resolved, created_at desc);
+create index if not exists pets_owner_idx   on public.pets (owner);
+
+-- El teléfono va en otra tabla para que solo lo vean personas con sesión iniciada
+-- (así los programas que rastrean la página sin cuenta no se lo llevan).
+create table if not exists public.pet_contacts (
+  pet_id bigint primary key references public.pets(id) on delete cascade,
+  phone  text not null check (phone ~ '^3[0-9]{9}$')      -- celular colombiano de 10 dígitos
+);
+
+alter table public.pets         enable row level security;
+alter table public.pet_contacts enable row level security;
+
+drop policy if exists "ver mascotas"            on public.pets;
+drop policy if exists "reportar mascota"        on public.pets;
+drop policy if exists "moderar mascotas"        on public.pets;
+drop policy if exists "borrar mascota propia o admin" on public.pets;
+create policy "ver mascotas" on public.pets for select
+  using (status = 'approved' or owner = auth.uid() or public.is_admin());
+create policy "reportar mascota" on public.pets for insert to authenticated
+  with check (owner = auth.uid());
+create policy "moderar mascotas" on public.pets for update to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+create policy "borrar mascota propia o admin" on public.pets for delete to authenticated
+  using (owner = auth.uid() or public.is_admin());
+
+drop policy if exists "ver contacto"    on public.pet_contacts;
+drop policy if exists "guardar contacto" on public.pet_contacts;
+create policy "ver contacto" on public.pet_contacts for select to authenticated
+  using (exists (select 1 from public.pets p where p.id = pet_id
+                 and (p.status = 'approved' or p.owner = auth.uid() or public.is_admin())));
+create policy "guardar contacto" on public.pet_contacts for insert to authenticated
+  with check (exists (select 1 from public.pets p where p.id = pet_id and p.owner = auth.uid()));
+
+grant select on public.pets to anon, authenticated;
+grant insert, update, delete on public.pets to authenticated;
+grant select, insert on public.pet_contacts to authenticated;
+
+-- Al reportar: queda pendiente (salvo admin), la fecha no puede ser futura ni de hace más de 60 días,
+-- la foto tiene que estar en la carpeta de quien reporta y máximo 5 reportes por día.
+create or replace function public.before_pet() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare hoy date := (now() at time zone 'America/Bogota')::date;
+begin
+  new.owner    := auth.uid();
+  new.status   := case when public.is_admin() then 'approved' else 'pending' end;
+  new.resolved := false;
+  if new.seen_on > hoy or new.seen_on < hoy - 60 then
+    raise exception 'La fecha no puede ser futura ni de hace más de 60 días';
+  end if;
+  if new.photo_path is not null and split_part(new.photo_path, '/', 1) <> new.owner::text then
+    raise exception 'La foto no es válida';
+  end if;
+  if (select count(*) from public.pets where owner = new.owner and created_at > now() - interval '1 day') >= 5 then
+    raise exception 'Llegaste al límite de 5 reportes de mascotas por día';
+  end if;
+  return new;
+end $$;
+drop trigger if exists before_pet on public.pets;
+create trigger before_pet before insert on public.pets
+  for each row execute function public.before_pet();
+
+-- «Ya apareció»: solo quien lo reportó puede marcarlo como resuelto (nada más puede cambiar).
+create or replace function public.resolve_pet(pet_id bigint) returns void
+language sql security definer set search_path = public as $$
+  update public.pets set resolved = true where id = pet_id and owner = auth.uid();
+$$;
+revoke all on function public.resolve_pet(bigint) from public, anon;
+grant execute on function public.resolve_pet(bigint) to authenticated;
+
+-- ───────── Almacenamiento de fotos (Supabase Storage) ─────────
+-- Bucket público para poder mostrar la foto sin sesión. Solo JPEG y máximo 2 MB
+-- (la app comprime y convierte cada foto antes de subirla, y de paso le quita la ubicación GPS).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('pet-photos', 'pet-photos', true, 2097152, array['image/jpeg'])
+on conflict (id) do update
+  set public = true, file_size_limit = 2097152, allowed_mime_types = array['image/jpeg'];
+
+drop policy if exists "fotos mascotas: subir" on storage.objects;
+drop policy if exists "fotos mascotas: ver"   on storage.objects;
+drop policy if exists "fotos mascotas: borrar" on storage.objects;
+-- Cada persona solo puede escribir dentro de su propia carpeta (nombre de carpeta = su id de usuario).
+create policy "fotos mascotas: subir" on storage.objects for insert to authenticated
+  with check (bucket_id = 'pet-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "fotos mascotas: ver" on storage.objects for select to authenticated
+  using (bucket_id = 'pet-photos' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
+create policy "fotos mascotas: borrar" on storage.objects for delete to authenticated
+  using (bucket_id = 'pet-photos' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));

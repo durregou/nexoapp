@@ -10,7 +10,7 @@ const CAT = {
   animales:{name:'Animales', long:'Protección animal', icon:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><ellipse cx="5.500" cy="11" rx="2" ry="2.600"/><ellipse cx="9.500" cy="6.500" rx="2" ry="2.600"/><ellipse cx="14.500" cy="6.500" rx="2" ry="2.600"/><ellipse cx="18.500" cy="11" rx="2" ry="2.600"/><path d="M12 11c-3 0-5.500 3-5.500 5.500 0 2 1.700 2.800 3.200 2.500 1-.2 1.500-.5 2.300-.5s1.300.3 2.300.5c1.500.3 3.200-.5 3.200-2.500C17.500 14 15 11 12 11z"/></svg>'}
 };
 
-const state = {picking:false, cat:'todas', when:'todas', q:'', loc:'', sel:null, user:null, authUser:null, isAdmin:false, myPubs:[], pending:[], reports:[], hashDone:false, reportId:null, busy:false, nearOn:false, joined:loadJoined()};
+const state = {picking:false, cat:'todas', when:'todas', q:'', loc:'', sel:null, user:null, authUser:null, isAdmin:false, pets:[], myPets:[], pendingPets:[], petKind:'todos', petSpecies:'todas', myPubs:[], pending:[], reports:[], hashDone:false, reportId:null, busy:false, nearOn:false, joined:loadJoined()};
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -141,6 +141,7 @@ function render(fit){
   renderHome();
   renderProfile();
   renderAdmin();
+  renderPets();
 }
 
 /* ---- selección ---- */
@@ -239,12 +240,23 @@ function locate(){
 
 /* ---- eventos ---- */
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-id],[data-cat],[data-open],[data-join],[data-close],[data-view],[data-when],[data-pub],[data-pubclose],[data-del],[data-page]:not(body),[data-login],[data-loginclose],[data-logout],[data-editname],[data-nameclose],[data-approve],[data-reject],[data-ics],[data-copy],[data-report],[data-reportclose],[data-dismiss],[data-install],[data-lmode],[data-forgot],[data-showpw],[data-passclose],[data-delclose],[data-chpass],[data-delacct],[data-signup]');
+  const t = e.target.closest('[data-id],[data-cat],[data-open],[data-join],[data-close],[data-view],[data-when],[data-pub],[data-pubclose],[data-del],[data-page]:not(body),[data-login],[data-loginclose],[data-logout],[data-editname],[data-nameclose],[data-approve],[data-reject],[data-ics],[data-copy],[data-report],[data-reportclose],[data-dismiss],[data-install],[data-lmode],[data-forgot],[data-showpw],[data-passclose],[data-delclose],[data-chpass],[data-delacct],[data-signup],[data-petnew],[data-petkind],[data-petspecies],[data-petopen],[data-ptkind],[data-ptclose],[data-petresolve],[data-petdel],[data-petcopy],[data-petapprove],[data-petreject]');
   if(!t) return;
   if(t.dataset.page){
     if(t.dataset.setcat){ state.cat = t.dataset.setcat; state.when = 'todas'; }
     setPage(t.dataset.page);
   }
+  else if(t.dataset.petnew){ openPetForm(); }
+  else if(t.dataset.petkind){ state.petKind = t.dataset.petkind; renderPets(); }
+  else if(t.dataset.petspecies){ state.petSpecies = t.dataset.petspecies; renderPets(); }
+  else if(t.dataset.petopen){ openPet(+t.dataset.petopen); }
+  else if(t.dataset.ptkind){ setPetKind(t.dataset.ptkind); }
+  else if(t.dataset.ptclose){ $('petdlg').close(); }
+  else if(t.dataset.petresolve){ resolvePetReport(+t.dataset.petresolve); }
+  else if(t.dataset.petdel){ deletePetReport(+t.dataset.petdel); }
+  else if(t.dataset.petcopy){ copyPetLink(+t.dataset.petcopy); }
+  else if(t.dataset.petapprove){ moderatePet(+t.dataset.petapprove, 'approved'); }
+  else if(t.dataset.petreject){ moderatePet(+t.dataset.petreject, 'rejected'); }
   else if(t.dataset.view){
     document.body.classList.remove('view-list', 'view-map'); document.body.classList.add('view-' + t.dataset.view);
     document.querySelectorAll('.toggle button').forEach(b => b.setAttribute('aria-pressed', b === t));
@@ -450,6 +462,10 @@ async function reloadCloud(){
       uid ? soft(CLOUD.isAdmin(uid), false) : false
     ]);
     const [pend, reps] = admin ? await Promise.all([soft(CLOUD.pending(), []), soft(CLOUD.reports(), [])]) : [[], []];
+    const [pets, myPets, pendPets] = await Promise.all([
+      soft(CLOUD.pets(uid), []), uid ? soft(CLOUD.myPets(uid), []) : [], admin ? soft(CLOUD.pendingPets(), []) : []
+    ]);
+    Object.assign(state, {pets:pets, myPets:myPets, pendingPets:pendPets});
     ACTS.splice(0, ACTS.length, ...list);
     Object.assign(state, {joined:joined, myPubs:mine, isAdmin:admin, pending:pend, reports:reps});
   } catch(e){ toast('No pudimos cargar las actividades. ' + CLOUD.friendly(e)); }
@@ -495,6 +511,7 @@ function showDialog(id){
 function openLogin(msg, mode){
   if(!CLOUD) return;
   if($('detail').open) $('detail').close();
+  if($('petview').open) $('petview').close();
   setLoginMode(mode || 'in');
   $('l-pass').value = ''; $('l-pass').type = 'password';
   if(msg){ const o = $('l-ok'); o.textContent = msg; o.hidden = false; }
@@ -605,6 +622,216 @@ $('nform').addEventListener('submit', async ev => {
   } catch(e){ err.textContent = CLOUD.friendly(e); err.hidden = false; }
   finally { state.busy = false; $('n-save').disabled = false; }
 });
+/* ---- mascotas perdidas y encontradas ---- */
+const SPECIES = {perro:'Perro', gato:'Gato', otro:'Otro animal'};
+const fmtDay = iso => new Date(iso + 'T12:00').toLocaleDateString('es-CO', {day:'numeric', month:'short'}).replace('.', '');
+const petName = p => p.name || (p.kind === 'perdido' ? 'Sin nombre' : 'Sin identificar');
+const KIND_LABEL = {perdido:'Perdido', encontrado:'Encontrado'};
+const PHONE_RE = /^3\d{9}$/;
+const phoneFmt = ph => ph.slice(0, 3) + ' ' + ph.slice(3, 6) + ' ' + ph.slice(6);
+const findPet = id => state.pets.find(p => p.id === id) || state.myPets.find(p => p.id === id) || state.pendingPets.find(p => p.id === id);
+const petUrl = id => location.href.split('#')[0] + '#p=' + id;
+const petShareText = p => (p.kind === 'perdido' ? 'Se perdió ' + (p.name || 'una mascota') + ' (' + SPECIES[p.species].toLowerCase() + ')' : 'Encontraron ' + (p.species === 'gato' ? 'un gato' : p.species === 'perro' ? 'un perro' : 'un animal')) + ' en ' + p.loc + '. Ayúdanos a compartir: ' + petUrl(p.id);
+
+function petCard(p){
+  const img = p.photo ? '<img src="' + esc(p.photo) + '" alt="' + esc(SPECIES[p.species] + ': ' + petName(p)) + '" loading="lazy">' : CAT.animales.icon;
+  return '<button type="button" class="pet" data-petopen="' + p.id + '"><span class="pet-img">' + img +
+    '<span class="pet-tag ' + p.kind + '">' + KIND_LABEL[p.kind] + '</span></span><span class="body"><h3>' + esc(petName(p)) + '</h3>' +
+    '<span class="meta">' + SPECIES[p.species] + ' · ' + esc(p.loc) + '</span><span class="meta">' + fmtDay(p.seen) + ' · ' + esc(p.place) + '</span></span></button>';
+}
+function renderPets(){
+  const el = $('pets');
+  document.querySelectorAll('[data-page="pets"]').forEach(b => { b.hidden = !CLOUD; });
+  if(!CLOUD){ el.innerHTML = ''; return; }
+  const list = state.pets.filter(p => (state.petKind === 'todos' || p.kind === state.petKind) && (state.petSpecies === 'todas' || p.species === state.petSpecies));
+  const chip = (attr, val, label, cur) => '<button type="button" class="chip" data-' + attr + '="' + val + '" aria-pressed="' + (cur === val) + '">' + label + '</button>';
+  el.innerHTML = '<div class="pg"><h1>Mascotas perdidas y encontradas</h1>' +
+    '<p class="sub">Ayuda a que vuelvan a casa. Los reportes se revisan antes de publicarse y se retiran a los 60 días.</p>' +
+    '<p style="margin-top:14px"><button type="button" class="btn" data-petnew="1">Reportar una mascota</button></p>' +
+    '<div class="chips wrap" style="margin-top:14px" role="group" aria-label="Filtrar por tipo de reporte">' +
+      chip('petkind', 'todos', 'Todos', state.petKind) + chip('petkind', 'perdido', 'Perdidos', state.petKind) + chip('petkind', 'encontrado', 'Encontrados', state.petKind) + '</div>' +
+    '<div class="chips wrap" role="group" aria-label="Filtrar por animal">' +
+      chip('petspecies', 'todas', 'Todos los animales', state.petSpecies) + chip('petspecies', 'perro', 'Perros', state.petSpecies) + chip('petspecies', 'gato', 'Gatos', state.petSpecies) + chip('petspecies', 'otro', 'Otros', state.petSpecies) + '</div>' +
+    '<p class="sub" style="margin:6px 0 0">' + list.length + (list.length === 1 ? ' reporte' : ' reportes') + '</p>' +
+    '<div class="pet-grid">' + (list.length ? list.map(petCard).join('') :
+      '<div class="empty" style="grid-column:1/-1"><strong>No hay reportes por ahora</strong>Si perdiste o encontraste una mascota, repórtala para que la comunidad te ayude.</div>') + '</div></div>';
+}
+
+/* detalle de un reporte */
+function openPet(id){
+  const p = findPet(id); if(!p) return false;
+  const dlg = $('petview');
+  dlg.innerHTML =
+    '<div class="pv-head ' + p.kind + '"><span>' + KIND_LABEL[p.kind] + ' · ' + SPECIES[p.species] + '</span><h2 id="pv-title">' + esc(petName(p)) + '</h2><p>' + fmtDay(p.seen) + ' · ' + esc(p.loc) + '</p></div>' +
+    (p.photo ? '<img class="pv-photo" src="' + esc(p.photo) + '" alt="' + esc(SPECIES[p.species] + ': ' + petName(p)) + '">' : '') +
+    '<div class="d-body"><p>' + esc(p.desc) + '</p>' +
+    '<div class="facts"><div><strong>' + esc(p.place) + '</strong><br><span>' + esc(p.loc) + ', Bogotá</span></div></div>' +
+    (p.status !== 'approved' ? '<span class="pill pill-' + (STATUS[p.status] || STATUS.pending)[1] + '">' + (STATUS[p.status] || STATUS.pending)[0] + '</span>' : '') +
+    '<div id="pv-contact" class="d-actions"><p class="sub">Cargando contacto…</p></div>' +
+    '<div class="d-share"><a class="btn ghost" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(petShareText(p)) + '">Compartir</a>' +
+      '<button type="button" class="btn ghost" data-petcopy="' + p.id + '">Copiar enlace</button>' +
+      '<a class="btn ghost" target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat=' + p.lat + '&mlon=' + p.lng + '#map=17/' + p.lat + '/' + p.lng + '">Ver mapa</a></div>' +
+    '<div class="d-actions">' +
+      (p.mine && p.status === 'approved' && !p.resolved ? '<button type="button" class="btn block" data-petresolve="' + p.id + '">' + (p.kind === 'perdido' ? '¡Ya apareció!' : 'Ya volvió con su familia') + '</button>' : '') +
+      ((p.mine || state.isAdmin) ? '<button type="button" class="btn ghost danger block" data-petdel="' + p.id + '">' + (p.mine ? 'Eliminar mi reporte' : 'Quitar reporte (admin)') + '</button>' : '') +
+      '<button type="button" class="btn ghost block" onclick="this.closest(\'dialog\').close()">Cerrar</button></div></div>';
+  if(!dlg.open) showDialog('petview');
+  const box = dlg.querySelector('#pv-contact');
+  if(!state.authUser){
+    box.innerHTML = '<button type="button" class="btn block" data-login="1">Inicia sesión para ver el contacto</button>';
+  } else {
+    CLOUD.petContact(id).then(ph => {
+      if(!box.isConnected) return;
+      if(!ph || !PHONE_RE.test(ph)){ box.innerHTML = '<p class="sub">No hay un contacto disponible.</p>'; return; }
+      const msg = 'Hola, te escribo por tu reporte de ' + (p.kind === 'perdido' ? 'la mascota perdida' : 'la mascota encontrada') + ' (' + petName(p) + ') en NexoApp.';
+      box.innerHTML = '<a class="btn block" target="_blank" rel="noopener" href="https://wa.me/57' + ph + '?text=' + encodeURIComponent(msg) + '">Escribir por WhatsApp</a>' +
+        '<a class="link" href="tel:+57' + ph + '">Llamar al ' + phoneFmt(ph) + '</a>';
+    }).catch(() => { if(box.isConnected) box.innerHTML = '<p class="sub">No pudimos cargar el contacto.</p>'; });
+  }
+  return true;
+}
+async function copyPetLink(id){
+  const url = petUrl(id);
+  let ok = false;
+  try { await navigator.clipboard.writeText(url); ok = true; } catch(e){}
+  toast(ok ? 'Enlace copiado' : url);
+}
+async function resolvePetReport(id){
+  if(!CLOUD || state.busy) return;
+  state.busy = true;
+  try { await CLOUD.resolvePet(id); } catch(e){ toast(CLOUD.friendly(e)); state.busy = false; return; }
+  state.busy = false;
+  if($('petview').open) $('petview').close();
+  toast('¡Qué buena noticia! Retiramos el reporte.'); await reloadCloud();
+}
+async function deletePetReport(id){
+  if(!CLOUD || state.busy) return;
+  const p = findPet(id); if(!p) return;
+  if(!(p.mine || state.isAdmin) || !window.confirm('¿Eliminar este reporte? No se puede deshacer.')) return;
+  state.busy = true;
+  try { await CLOUD.removePet(id, p.photoPath); } catch(e){ toast(CLOUD.friendly(e)); state.busy = false; return; }
+  state.busy = false;
+  if($('petview').open) $('petview').close();
+  toast('Reporte eliminado'); await reloadCloud();
+}
+async function moderatePet(id, status){
+  if(!CLOUD || !state.isAdmin || state.busy) return;
+  state.busy = true;
+  try { await CLOUD.moderatePet(id, status); } catch(e){ toast(CLOUD.friendly(e)); state.busy = false; return; }
+  state.busy = false;
+  toast(status === 'approved' ? 'Reporte aprobado y publicado' : 'Reporte rechazado'); await reloadCloud();
+}
+function adminPetCard(p){
+  return '<article class="act" data-cat="animales"><span class="edge"></span><span class="body">' +
+    '<span class="kind">' + KIND_LABEL[p.kind] + ' · ' + SPECIES[p.species] + '</span><h3>' + esc(petName(p)) + '</h3>' +
+    (p.photo ? '<img class="pv-photo" style="border-radius:12px;max-height:220px" src="' + esc(p.photo) + '" alt="Foto del reporte">' : '<span class="meta">Sin foto</span>') +
+    '<span class="meta">' + fmtDay(p.seen) + ' · ' + esc(p.loc) + ' · ' + esc(p.place) + '</span>' +
+    '<span class="adm-desc">' + esc(p.desc) + '</span>' +
+    '<span class="adm-btns"><button type="button" class="btn" data-petapprove="' + p.id + '">Aprobar</button>' +
+    '<button type="button" class="btn ghost" data-petreject="' + p.id + '">Rechazar</button></span></span></article>';
+}
+function petMineCard(p){
+  const st = p.resolved ? ['Resuelto', 'approved'] : (STATUS[p.status] || STATUS.pending);
+  return '<article class="act" data-cat="animales"><span class="edge"></span><span class="body">' +
+    '<span class="kind">' + KIND_LABEL[p.kind] + ' · ' + SPECIES[p.species] + '</span><h3>' + esc(petName(p)) + '</h3>' +
+    '<span class="meta">' + fmtDay(p.seen) + ' · ' + esc(p.loc) + '</span><span class="pill pill-' + st[1] + '">' + st[0] + '</span>' +
+    '<span class="adm-btns"><button type="button" class="btn ghost sm" data-petopen="' + p.id + '">Ver</button>' +
+    '<button type="button" class="btn ghost sm danger" data-petdel="' + p.id + '">Eliminar</button></span></span></article>';
+}
+function petsMineHtml(){
+  if(!CLOUD) return '';
+  return '<div class="sec-title"><h2>Mis reportes de mascotas</h2></div><div class="feed two">' +
+    (state.myPets.length ? state.myPets.map(petMineCard).join('') :
+      '<div class="empty"><strong>Sin reportes</strong>Si perdiste o encontraste una mascota, repórtala.<br><button type="button" class="btn" data-petnew="1">Reportar una mascota</button></div>') + '</div>';
+}
+
+/* formulario para reportar */
+let ptmap = null, ptmark = null, ptpoint = null, petBlob = null, petFormKind = 'perdido';
+function setPetKind(k){
+  petFormKind = k;
+  document.querySelectorAll('[data-ptkind]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.ptkind === k)));
+  $('pt-datelabel').textContent = k === 'perdido' ? '¿Cuándo se perdió?' : '¿Cuándo la encontraste?';
+  $('pt-placelabel').textContent = k === 'perdido' ? 'Dónde lo viste por última vez' : 'Dónde la encontraste';
+  $('pt-namerow').firstChild.textContent = k === 'perdido' ? 'Nombre (si lo sabes)' : 'Nombre (si tiene collar o placa)';
+}
+async function compressImage(file){
+  if(!/^image\//.test(file.type)) throw new Error('Elige un archivo de imagen.');
+  if(file.size > 25 * 1024 * 1024) throw new Error('Esa foto es demasiado grande.');
+  let bmp;
+  try { bmp = await createImageBitmap(file, {imageOrientation:'from-image'}); }
+  catch(e){
+    bmp = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('No pudimos leer esa foto.')); i.src = URL.createObjectURL(file); });
+  }
+  const k = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k));
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);   /* volver a dibujarla borra los metadatos (incluida la ubicación GPS) */
+  for(const q of [0.82, 0.7, 0.55]){
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', q));
+    if(blob && blob.size <= 1.5 * 1024 * 1024) return blob;
+  }
+  throw new Error('La foto pesa demasiado. Prueba con otra.');
+}
+function openPetForm(){
+  if(!CLOUD) return;
+  if(!state.authUser){ openLogin('Inicia sesión para reportar una mascota.'); return; }
+  const f = $('ptform'); f.reset(); ptpoint = null; petBlob = null;
+  $('pt-err').hidden = true; $('pt-preview').hidden = true; $('pt-hint').textContent = 'Toca el mapa para marcar el lugar.';
+  if(!$('pt-loc').options.length) LOCS.forEach(l => { const o = document.createElement('option'); o.value = o.textContent = l; $('pt-loc').appendChild(o); });
+  const today = iso(new Date());
+  $('pt-date').max = today; $('pt-date').min = iso(addDays(new Date(), -60)); $('pt-date').value = today;
+  setPetKind('perdido');
+  showDialog('petdlg');
+  if(!ptmap){
+    ptmap = L.map('ptmap', {minZoom:CFG.MIN_ZOOM, maxBounds:CFG.BOUNDS, maxBoundsViscosity:0.8}).setView(CFG.CENTER, 11);
+    L.tileLayer(CFG.TILE_URL, {maxZoom:19, attribution:CFG.TILE_ATTRIBUTION}).addTo(ptmap);
+    ptmap.on('click', e => {
+      ptpoint = e.latlng;
+      if(ptmark) ptmark.setLatLng(e.latlng); else ptmark = L.marker(e.latlng).addTo(ptmap);
+      $('pt-hint').textContent = 'Lugar marcado. Toca otro punto si quieres moverlo.';
+    });
+  }
+  if(ptmark){ ptmark.remove(); ptmark = null; }
+  ptmap.setView(CFG.CENTER, 11);
+  setTimeout(() => ptmap.invalidateSize(), 60);
+}
+$('pt-photo').addEventListener('change', async () => {
+  const file = $('pt-photo').files[0], err = $('pt-err'), prev = $('pt-preview');
+  petBlob = null; prev.hidden = true; err.hidden = true;
+  if(!file) return;
+  try {
+    petBlob = await compressImage(file);
+    prev.src = URL.createObjectURL(petBlob); prev.hidden = false;
+  } catch(e){ err.textContent = e.message; err.hidden = false; $('pt-photo').value = ''; }
+});
+$('ptform').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  if(!CLOUD || state.busy) return;
+  const err = $('pt-err'), bad = (m, el) => { err.textContent = m; err.hidden = false; if(el) el.focus(); };
+  err.hidden = true;
+  const name = $('pt-name').value.trim(), desc = $('pt-desc').value.trim(), place = $('pt-place').value.trim(), seen = $('pt-date').value;
+  let phone = $('pt-phone').value.replace(/\D/g, '');
+  if(phone.length === 12 && phone.startsWith('57')) phone = phone.slice(2);
+  if(desc.length < 5) return bad('Describe al animal: color, tamaño, señas (mínimo 5 caracteres).', $('pt-desc'));
+  if(!seen) return bad('Elige la fecha.', $('pt-date'));
+  if(seen > iso(new Date()) || seen < iso(addDays(new Date(), -60))) return bad('La fecha no puede ser futura ni de hace más de 60 días.', $('pt-date'));
+  if(place.length < 2) return bad('Escribe el lugar (mínimo 2 caracteres).', $('pt-place'));
+  if(!ptpoint) return bad('Toca el mapa para marcar el lugar.', null);
+  const [[s0, w0], [n0, e0]] = CFG.BOUNDS;
+  if(ptpoint.lat < s0 || ptpoint.lat > n0 || ptpoint.lng < w0 || ptpoint.lng > e0) return bad('El lugar debe estar dentro de Bogotá.', null);
+  if(!PHONE_RE.test(phone)) return bad('Escribe un celular colombiano de 10 dígitos (empieza por 3).', $('pt-phone'));
+  state.busy = true; $('pt-send').disabled = true;
+  try {
+    const r = await CLOUD.createPet({kind:petFormKind, species:$('pt-species').value, name:name, desc:desc, loc:$('pt-loc').value, place:place,
+      lat:+ptpoint.lat.toFixed(5), lng:+ptpoint.lng.toFixed(5), seen:seen, phone:phone}, petBlob);
+    $('petdlg').close(); state.busy = false;
+    await reloadCloud();
+    setPage(r.status === 'approved' ? 'pets' : 'profile');
+    toast(r.status === 'approved' ? 'Reporte publicado' : 'Enviado. Lo revisaremos y aparecerá en Mascotas cuando se apruebe.');
+  } catch(e){ bad(CLOUD.friendly(e)); }
+  finally { state.busy = false; $('pt-send').disabled = false; }
+});
+
 /* ---- navegación entre Inicio, Explorar y Perfil ---- */
 const ICON_USER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>';
 function setPage(page, silent){
@@ -617,7 +844,7 @@ function setPage(page, silent){
     setTimeout(() => map.invalidateSize(), 60);
     if(!silent) render(true);
   } else {
-    renderHome(); renderProfile(); renderAdmin();
+    renderHome(); renderProfile(); renderAdmin(); renderPets();
     const pg = $(page); if(pg) pg.scrollTop = 0;
   }
 }
@@ -658,10 +885,11 @@ async function copyLink(id){
   toast(ok ? 'Enlace copiado' : url);
 }
 function openFromHash(){
-  const m = /^#a=(\d+)$/.exec(location.hash);
+  const m = /^#([ap])=(\d+)$/.exec(location.hash);
   if(!m) return;
-  const id = +m[1];
+  const id = +m[2];
   history.replaceState(null, '', location.href.split('#')[0]);
+  if(m[1] === 'p'){ if(!openPet(id)) toast('Ese reporte ya no está disponible.'); return; }
   if(ACTS.some(a => a.id === id)) openDetail(id); else toast('Esa actividad ya no está disponible.');
 }
 /* .ics: hora de Bogotá (UTC-5 todo el año), 2 horas de duración y recordatorio 1 hora antes */
@@ -777,7 +1005,8 @@ function renderAdmin(){
   const reported = state.isAdmin ? reportedList() : [];
   const repIds = new Set(reported.map(x => x.a.id));
   const pend = state.isAdmin ? state.pending.filter(a => !repIds.has(a.id)) : [];
-  const n = pend.length + reported.length;
+  const pendPets = state.isAdmin ? state.pendingPets : [];
+  const n = pend.length + reported.length + pendPets.length;
   document.querySelectorAll('[data-page="admin"]').forEach(b => {
     b.hidden = !state.isAdmin;
     const c = b.querySelector('.adm-n'); if(c){ c.hidden = !n; c.textContent = n; }
@@ -788,7 +1017,9 @@ function renderAdmin(){
     ' · ' + reported.length + (reported.length === 1 ? ' con reportes' : ' con reportes') + '</p>' +
     (reported.length ? '<h2 class="sec-sub">Reportadas</h2><div class="feed two">' + reported.map(reportCard).join('') + '</div>' : '') +
     '<h2 class="sec-sub">Por revisar</h2><div class="feed two">' +
-    (pend.length ? pend.map(adminCard).join('') : '<div class="empty"><strong>Todo al día</strong>No hay publicaciones pendientes.</div>') + '</div></div>';
+    (pend.length ? pend.map(adminCard).join('') : '<div class="empty"><strong>Todo al día</strong>No hay publicaciones pendientes.</div>') + '</div>' +
+    '<h2 class="sec-sub">Mascotas por revisar (' + pendPets.length + ')</h2><div class="feed two">' +
+    (pendPets.length ? pendPets.map(adminPetCard).join('') : '<div class="empty"><strong>Todo al día</strong>No hay reportes de mascotas pendientes.</div>') + '</div></div>';
 }
 async function dismissReports(id){
   if(!CLOUD || !state.isAdmin || state.busy) return;
@@ -828,7 +1059,7 @@ function renderProfile(){
     (mine.length ? mine.map(card).join('') : '<div class="empty"><strong>Aún no te has inscrito</strong>Explora actividades y únete a la que más te guste.<br><button type="button" class="btn" data-page="explore">Explorar</button></div>') +
     '</div><div class="sec-title"><h2>Lo que has publicado</h2></div><div class="feed two">' +
     (pub.length ? pub.map(CLOUD ? pubCard : card).join('') : '<div class="empty"><strong>Todavía nada</strong>Comparte algo que sabes o una causa que te importa.<br><button type="button" class="btn" data-pub="1">Publicar algo</button></div>') +
-    '</div></div></div>' + (deferredInstall ? '<p><button type="button" class="btn ghost" data-install="1">Instalar NexoApp en tu celular</button></p>' : '') +
+    '</div>' + petsMineHtml() + '</div></div>' + (deferredInstall ? '<p><button type="button" class="btn ghost" data-install="1">Instalar NexoApp en tu celular</button></p>' : '') +
     '<p class="pnote">' + (CLOUD ? 'Tus inscripciones y publicaciones se guardan en tu cuenta.' : 'Por ahora tus inscripciones y publicaciones se guardan solo en este navegador.') +
     '<br><a href="terminos.html" target="_blank" rel="noopener">Términos de uso</a> · <a href="privacidad.html" target="_blank" rel="noopener">Política de privacidad</a></p></div>';
 }

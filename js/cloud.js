@@ -17,6 +17,13 @@
       date:r.date, time:String(r.time).slice(0,5), total:r.total, desc:r.description, status:r.status,
       taken:taken, mine:!!userId && r.owner === userId};
   }
+  var BUCKET = 'pet-photos';
+  function petRow(r, userId){
+    var url = r.photo_path ? sb.storage.from(BUCKET).getPublicUrl(r.photo_path).data.publicUrl : null;
+    return {id:r.id, kind:r.kind, species:r.species, name:r.name || '', desc:r.description, loc:r.loc, place:r.place,
+      lat:r.lat, lng:r.lng, seen:r.seen_on, photo:url, photoPath:r.photo_path, status:r.status, resolved:r.resolved,
+      created:r.created_at, mine:!!userId && r.owner === userId};
+  }
   var today = function(){ var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
   function fail(error){ var e = new Error(error && error.message || 'Error de conexión'); e.code = error && error.code; throw e; }
 
@@ -39,6 +46,12 @@
       };
       return byName[chk[1]] || 'Revisa los datos: alguno es demasiado corto o demasiado largo.';
     }
+    if(/pet_contacts_phone_check/i.test(m)) return 'El teléfono debe ser un celular colombiano de 10 dígitos (empieza por 3).';
+    if(/violates check constraint "pets_(description|place|name)_check"/i.test(m)) return 'Revisa la descripción (5 a 400 caracteres), el lugar y el nombre.';
+    if(/violates check constraint "pets_(lat|lng)_check"/i.test(m)) return 'El lugar debe estar dentro de Bogotá.';
+    if(/violates check constraint "pets_photo_path_check"|La foto no es válida/i.test(m)) return 'La foto no es válida. Prueba con otra.';
+    if(/exceeded the maximum allowed size|payload too large/i.test(m)) return 'La foto pesa demasiado. Prueba con otra.';
+    if(/mime type|not supported/i.test(m)) return 'La foto debe ser una imagen (JPG, PNG o WebP).';
     if(/invalid login credentials/i.test(m)) return 'Correo o contraseña incorrectos.';
     if(/email not confirmed/i.test(m)) return 'Aún no confirmas tu correo. Revisa tu bandeja de entrada (y el spam).';
     if(/already registered|already been registered/i.test(m)) return 'Ese correo ya tiene una cuenta. Inicia sesión.';
@@ -47,7 +60,7 @@
     if(/contraseña incorrecta/i.test(m)) return m;
     if(/reports_activity_id_reporter_key/i.test(m)) return 'Ya reportaste esta actividad. Gracias.';
     if(/duplicate key|23505/i.test(m + (err.code || ''))) return 'Ya estás inscrito en esta actividad.';
-    if(/futuras|límite de|permiso|no está disponible/i.test(m)) return m;
+    if(/futuras|límite de|permiso|no está disponible|fecha no puede/i.test(m)) return m;
     if(/row-level security|jwt|not authenticated/i.test(m)) return 'Inicia sesión para continuar.';
     if(/rate limit|security purposes/i.test(m)) return 'Se enviaron demasiados correos o intentos. Espera un momento y vuelve a intentarlo.';
     if(/fetch|network/i.test(m)) return 'No hay conexión. Intenta de nuevo.';
@@ -94,6 +107,11 @@
     async deleteAccount(email, password){
       var v = await sb.auth.signInWithPassword({email:email, password:password});
       if(v.error) fail({message:'Contraseña incorrecta.'});
+      try {   // las fotos viven en Storage, no en la base: hay que borrarlas con la API antes de perder la sesión
+        var u = await window.NexoCloud.user();
+        var store = sb.storage.from(BUCKET), ls = await store.list(u.id, {limit:1000});
+        if(!ls.error && ls.data.length) await store.remove(ls.data.map(function(f){ return u.id + '/' + f.name; }));
+      } catch(e){}
       var r = await sb.rpc('delete_my_account');
       if(r.error) fail(r.error);
       try { await sb.auth.signOut({scope:'local'}); } catch(e){}
@@ -167,6 +185,63 @@
       var r = await sb.from('reports').delete().eq('activity_id', id);
       if(r.error) fail(r.error);
     },
+    /* ---- mascotas perdidas y encontradas ---- */
+    /* Reportes aprobados, sin resolver y de los últimos 60 días. */
+    async pets(userId){
+      var since = new Date(Date.now() - 60 * 864e5).toISOString();
+      var r = await sb.from('pets').select('*').eq('status', 'approved').eq('resolved', false)
+        .gte('created_at', since).order('created_at', {ascending:false});
+      if(r.error) fail(r.error);
+      return r.data.map(function(x){ return petRow(x, userId); });
+    },
+    async myPets(userId){
+      var r = await sb.from('pets').select('*').eq('owner', userId).order('created_at', {ascending:false});
+      if(r.error) fail(r.error);
+      return r.data.map(function(x){ return petRow(x, userId); });
+    },
+    async pendingPets(){
+      var r = await sb.from('pets').select('*').eq('status', 'pending').order('created_at');
+      if(r.error) fail(r.error);
+      return r.data.map(function(x){ return petRow(x, null); });
+    },
+    /* El teléfono solo lo entrega la base de datos a quien tiene sesión iniciada. */
+    async petContact(id){
+      var r = await sb.from('pet_contacts').select('phone').eq('pet_id', id).maybeSingle();
+      if(r.error) fail(r.error);
+      return r.data ? r.data.phone : null;
+    },
+    /* Sube la foto (carpeta = id de usuario), crea el reporte y guarda el contacto.
+       Si algo falla a medias, deshace lo anterior para no dejar archivos ni filas sueltas. */
+    async createPet(p, blob){
+      var u = await window.NexoCloud.user();
+      if(!u) fail({message:'not authenticated'});
+      var store = sb.storage.from(BUCKET), path = null;
+      if(blob){
+        path = u.id + '/' + crypto.randomUUID() + '.jpg';
+        var up = await store.upload(path, blob, {contentType:'image/jpeg', upsert:false});
+        if(up.error) fail(up.error);
+      }
+      var cleanup = async function(){ if(path){ try { await store.remove([path]); } catch(e){} } };
+      var ins = await sb.from('pets').insert({kind:p.kind, species:p.species, name:p.name || null, description:p.desc,
+        loc:p.loc, place:p.place, lat:p.lat, lng:p.lng, seen_on:p.seen, photo_path:path}).select().single();
+      if(ins.error){ await cleanup(); fail(ins.error); }
+      var c = await sb.from('pet_contacts').insert({pet_id:ins.data.id, phone:p.phone});
+      if(c.error){ await sb.from('pets').delete().eq('id', ins.data.id); await cleanup(); fail(c.error); }
+      return {id:ins.data.id, status:ins.data.status};
+    },
+    async resolvePet(id){ var r = await sb.rpc('resolve_pet', {pet_id:id}); if(r.error) fail(r.error); },
+    async removePet(id, photoPath){
+      var r = await sb.from('pets').delete().eq('id', id).select();
+      if(r.error) fail(r.error);
+      if(!r.data.length) fail({message:'No tienes permiso o el reporte ya no existe.'});
+      if(photoPath){ try { await sb.storage.from(BUCKET).remove([photoPath]); } catch(e){} }
+    },
+    async moderatePet(id, status){
+      var r = await sb.from('pets').update({status:status}).eq('id', id).select();
+      if(r.error) fail(r.error);
+      if(!r.data.length) fail({message:'No tienes permiso para moderar.'});
+    },
+
     async moderate(id, status){
       var r = await sb.from('activities').update({status:status}).eq('id', id).select();
       if(r.error) fail(r.error);

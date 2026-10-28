@@ -295,3 +295,25 @@ a.btn{text-decoration:none}
 /* campos de texto: color legible también en modo oscuro (incluye el marcador de posición) */
 .field::placeholder{color:var(--muted);opacity:.8}
 .field:-webkit-autofill{-webkit-text-fill-color:var(--ink);caret-color:var(--ink)}
+
+/* mascotas perdidas y encontradas */
+body[data-page="pets"] #pets{display:block}
+.pet-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));margin-top:14px}
+.pet{display:grid;grid-template-rows:auto 1fr;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;text-align:left;padding:0;width:100%}
+@media (hover:hover){.pet:hover{border-color:var(--muted)}}
+.pet-img{position:relative;aspect-ratio:4/3;background:var(--bg);display:grid;place-items:center;color:var(--muted)}
+.pet-img img{width:100%;height:100%;object-fit:cover;display:block}
+.pet-img svg{width:44px;height:44px;opacity:.6}
+.pet-tag{position:absolute;top:10px;left:10px;border-radius:999px;padding:3px 11px;font-size:12px;font-weight:700;color:#fff}
+.pet-tag.perdido{background:#B32A5E}
+.pet-tag.encontrado{background:#1F7A4D}
+.pet .body{padding:12px 14px;display:grid;gap:3px}
+.pet h3{font-size:17px;font-weight:600}
+.pet .meta{color:var(--muted);font-size:14px}
+.pv-photo{width:100%;max-height:340px;object-fit:cover;display:block;background:var(--bg)}
+.pv-head{padding:18px 22px;color:#fff}
+.pv-head.perdido{background:#B32A5E}
+.pv-head.encontrado{background:#1F7A4D}
+.pv-head h2{font-size:clamp(20px,5vw,26px);font-weight:800;margin:4px 0}
+.pt-preview{max-height:180px;max-width:100%;border-radius:12px;object-fit:cover;justify-self:start}
+.chips.wrap{margin:0;padding:2px 0 6px;flex-wrap:wrap;overflow:visible;mask-image:none;-webkit-mask-image:none;cursor:default}

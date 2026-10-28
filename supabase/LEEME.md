@@ -104,3 +104,15 @@ La app ya no usa enlaces mágicos: la gente se registra con nombre, apellido, co
 
 ## Eliminar la cuenta
 En **Perfil → Eliminar mi cuenta** la persona escribe su contraseña y la palabra ELIMINAR. Se borran su cuenta, sus inscripciones, sus reportes y las actividades que publicó (con las inscripciones de otras personas en ellas). Para que funcione, corre `schema.sql` completo otra vez: crea la función `delete_my_account()`.
+
+## Mascotas perdidas y encontradas (con fotos)
+- Hay una pestaña **Mascotas**. Cualquiera ve los reportes aprobados; para **reportar** y para **ver el celular de contacto** hay que iniciar sesión.
+- Cada reporte lo revisas tú en **Administrar → Mascotas por revisar** (con la foto a la vista) antes de que se publique. Lo que reporta un admin se aprueba solo.
+- Quien reportó puede marcar **«Ya apareció»** y el reporte se retira. Además, los reportes dejan de mostrarse a los 60 días.
+- Las fotos van a **Supabase Storage**, en el bucket público `pet-photos`, una carpeta por persona. La app las reduce a máximo 1280 px y las convierte a JPEG antes de subirlas, lo que además les borra la ubicación GPS. El bucket solo acepta JPEG de hasta 2 MB.
+- El celular se guarda aparte (`pet_contacts`) y solo lo entrega la base de datos a personas con sesión iniciada. Es una protección contra programas que rastrean la página, no contra una persona con cuenta.
+- Al eliminar un reporte o una cuenta, también se borran sus fotos.
+
+**Para activarlo:** corre `schema.sql` completo otra vez. Crea las tablas, el bucket y las reglas. Después, en **Storage** deberías ver el bucket `pet-photos` marcado como *Public*. El plan gratuito incluye 1 GB de almacenamiento, que alcanza para miles de fotos reducidas.
+
+**Pendiente a futuro:** la pestaña de reportes no tiene todavía el botón «Reportar» para denunciar un reporte de mascota indebido (hoy lo quitas tú desde el panel). Las fotos de reportes que expiran a los 60 días siguen en Storage; se pueden limpiar con una tarea programada.
