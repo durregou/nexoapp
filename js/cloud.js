@@ -24,6 +24,21 @@
   function friendly(err){
     var m = (err && err.message) || '';
     if(/cupos completos/i.test(m)) return 'Los cupos se acaban de llenar.';
+    var chk = /violates check constraint "([a-z_]+)"/i.exec(m);
+    if(chk){
+      var byName = {
+        activities_title_check:'El título debe tener entre 3 y 80 caracteres.',
+        activities_host_check:'«Quién organiza» debe tener entre 2 y 60 caracteres.',
+        activities_place_check:'El lugar debe tener entre 2 y 90 caracteres.',
+        activities_description_check:'La descripción debe tener entre 5 y 400 caracteres.',
+        activities_total_check:'Los cupos deben estar entre 1 y 500.',
+        activities_lat_check:'El lugar debe estar dentro de Bogotá.',
+        activities_lng_check:'El lugar debe estar dentro de Bogotá.',
+        activities_loc_check:'Elige una localidad de la lista.',
+        reports_details_check:'El comentario puede tener hasta 200 caracteres.'
+      };
+      return byName[chk[1]] || 'Revisa los datos: alguno es demasiado corto o demasiado largo.';
+    }
     if(/invalid login credentials/i.test(m)) return 'Correo o contraseña incorrectos.';
     if(/email not confirmed/i.test(m)) return 'Aún no confirmas tu correo. Revisa tu bandeja de entrada (y el spam).';
     if(/already registered|already been registered/i.test(m)) return 'Ese correo ya tiene una cuenta. Inicia sesión.';

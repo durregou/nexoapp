@@ -375,15 +375,17 @@ async function submitPublish(ev){
   const v = id => $(id).value.trim();
   const title = v('f-title'), host = v('f-host'), place = v('f-place'), desc = v('f-desc');
   const date = v('f-date'), time = v('f-time'), total = parseInt($('f-total').value, 10);
-  if(!title) return fail('Escribe un título.', $('f-title'));
-  if(!host) return fail('Dinos quién organiza.', $('f-host'));
+  if(title.length < 3) return fail('El título debe tener al menos 3 caracteres.', $('f-title'));
+  if(host.length < 2) return fail('Dinos quién organiza (mínimo 2 caracteres).', $('f-host'));
   if(!date) return fail('Elige la fecha.', $('f-date'));
   if(!time) return fail('Elige la hora.', $('f-time'));
   if(new Date(date + 'T' + time) <= new Date()) return fail('La fecha y hora deben ser futuras.', $('f-date'));
   if(!Number.isFinite(total) || total < 1 || total > 500) return fail('Los cupos deben estar entre 1 y 500.', $('f-total'));
-  if(!place) return fail('Escribe el nombre del lugar.', $('f-place'));
+  if(place.length < 2) return fail('Escribe el nombre del lugar (mínimo 2 caracteres).', $('f-place'));
   if(!ppoint) return fail('Toca el mapa para marcar dónde será.', null);
-  if(!desc) return fail('Cuéntanos de qué trata la actividad.', $('f-desc'));
+  if(desc.length < 5) return fail('Cuéntanos un poco más de la actividad: la descripción necesita al menos 5 caracteres.', $('f-desc'));
+  const [[s0, w0], [n0, e0]] = CFG.BOUNDS;
+  if(ppoint.lat < s0 || ppoint.lat > n0 || ppoint.lng < w0 || ppoint.lng > e0) return fail('El lugar debe estar dentro de Bogotá.', null);
   let status = 'approved';
   let id = Math.max(1000, ...ACTS.map(a => a.id)) + 1;
   const a = {id:id, mine:true, cat:$('f-cat').value, title:title, host:host, loc:$('f-loc').value, place:place,
