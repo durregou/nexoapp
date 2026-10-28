@@ -76,10 +76,19 @@ const map = L.map('map', {minZoom:CFG.MIN_ZOOM, maxBounds:CFG.BOUNDS, maxBoundsV
 L.tileLayer(CFG.TILE_URL, {maxZoom:19, attribution:CFG.TILE_ATTRIBUTION}).addTo(map);
 const layer = (L.markerClusterGroup ? L.markerClusterGroup({
   showCoverageOnHover:false, maxClusterRadius:46,
+  zoomToBoundsOnClick:false, spiderfyOnMaxZoom:false,   /* el clic se maneja abajo, en 'clusterclick' */
   iconCreateFunction: c => L.divIcon({className:'', html:'<span class="nx-cluster">' + c.getChildCount() + '</span>', iconSize:[40,40]})
 }) : L.layerGroup()).addTo(map);
 const markers = new Map();
 let meMarker = null;
+
+/* Al tocar un grupo: si sus pines están en el mismo punto (varias actividades en un mismo lugar) el
+   zoom nunca los separa, así que se abren en abanico; si no, el mapa se acerca a ellos. */
+if(layer.on) layer.on('clusterclick', e => {
+  const c = e.layer, b = c.getBounds();
+  if(map.distance(b.getSouthWest(), b.getNorthEast()) < 40) c.spiderfy();
+  else c.zoomToBounds({padding:[48, 48]});
+});
 
 function pinIcon(a, sel){
   return L.divIcon({className:'', html:'<span class="pin ' + a.cat + (sel ? ' sel' : '') + '">' + CAT[a.cat].icon + '</span>', iconSize:[34,34], iconAnchor:[17,17], popupAnchor:[0,-18]});
@@ -230,7 +239,7 @@ function locate(){
 
 /* ---- eventos ---- */
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-id],[data-cat],[data-open],[data-join],[data-close],[data-view],[data-when],[data-pub],[data-pubclose],[data-del],[data-page],[data-login],[data-loginclose],[data-logout],[data-editname],[data-nameclose],[data-approve],[data-reject],[data-ics],[data-copy],[data-report],[data-reportclose],[data-dismiss],[data-install]');
+  const t = e.target.closest('[data-id],[data-cat],[data-open],[data-join],[data-close],[data-view],[data-when],[data-pub],[data-pubclose],[data-del],[data-page]:not(body),[data-login],[data-loginclose],[data-logout],[data-editname],[data-nameclose],[data-approve],[data-reject],[data-ics],[data-copy],[data-report],[data-reportclose],[data-dismiss],[data-install]');
   if(!t) return;
   if(t.dataset.page){
     if(t.dataset.setcat){ state.cat = t.dataset.setcat; state.when = 'todas'; }
