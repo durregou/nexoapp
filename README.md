@@ -8,6 +8,7 @@ Plataforma gratuita para Bogotá donde las personas comparten conocimiento, se u
 
 - Mapa de OpenStreetMap con [Leaflet](https://leafletjs.com/), pines por categoría y agrupación de pines cercanos.
 - Filtros por categoría, localidad, fecha (hoy, esta semana, fin de semana, este mes) y texto, y botón **Cerca de mí** (la ubicación nunca sale del navegador).
+- En el celular, el mapa tiene un botón «Filtros» (con contador) que abre un panel desde abajo con todos los filtros, sin tener que volver a la lista.
 - Navegación Inicio, Explorar, Perfil y Publicar: barra lateral en escritorio y barra inferior en celular.
 - Cuentas con correo y contraseña (con confirmación por correo y recuperación de contraseña), con nombre y apellido.
 - Eliminar la propia cuenta desde el Perfil (borra la cuenta, las inscripciones y lo publicado).

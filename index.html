@@ -51,6 +51,10 @@
 
 <div class="layout">
   <section class="panel" id="panel" aria-label="Actividades">
+    <div class="sheet-head">
+      <strong>Filtros</strong>
+      <button type="button" class="btn sm" id="sheetDone">Ver en el mapa</button>
+    </div>
     <div class="filters">
       <label class="sr" for="q">Buscar actividades</label>
       <input class="field" id="q" type="search" placeholder="Busca un tema: huerta, inglés, adopción">
@@ -74,6 +78,10 @@
 
   <section class="mapwrap" aria-label="Mapa de actividades">
     <div id="map"></div>
+    <button type="button" class="map-filter-btn" id="filterBtn" aria-expanded="false" aria-controls="panel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+      Filtros <b id="filterN" hidden></b>
+    </button>
   </section>
 </div>
 </div>
@@ -87,6 +95,8 @@
   <button type="button" class="tab" data-page="admin" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.500-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span>Admin</span><span class="adm-n" hidden></span></button>
   <button type="button" class="tab" data-page="profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg><span>Perfil</span></button>
 </nav>
+
+<div class="sheet-back" id="sheetBack" hidden></div>
 
 <dialog id="detail" aria-labelledby="d-title"></dialog>
 

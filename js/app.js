@@ -155,12 +155,34 @@ function renderChips(){
 function renderWhens(){
   $('whens').innerHTML = WHENS.map(w => '<button type="button" class="chip" data-when="' + w[0] + '" aria-pressed="' + (state.when === w[0]) + '">' + w[1] + '</button>').join('');
 }
+/* La barra inferior no mide siempre lo mismo (zona segura del iPhone, pestaña de admin, tamaño de letra):
+   se mide y se guarda para que el contenido y el panel de filtros queden exactamente encima de ella. */
+function syncTabbar(){
+  const tb = document.querySelector('.tabbar');
+  if(tb && tb.offsetHeight) document.documentElement.style.setProperty('--tabbar-h', tb.offsetHeight + 'px');
+}
+window.addEventListener('resize', syncTabbar);
+window.addEventListener('orientationchange', syncTabbar);
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(syncTabbar);
+/* ---- panel de filtros sobre el mapa (celular) ---- */
+function setSheet(open){
+  if(open) syncTabbar();
+  document.body.classList.toggle('sheet-open', !!open);
+  $('sheetBack').hidden = !open;
+  $('filterBtn').setAttribute('aria-expanded', String(!!open));
+  if(open) $('sheetDone').focus(); else if(document.activeElement === $('sheetDone')) $('filterBtn').focus();
+}
+function updateFilterBadge(){
+  const n = (state.cat !== 'todas') + (state.when !== 'todas') + (state.loc ? 1 : 0) + (state.q.trim() ? 1 : 0) + (state.nearOn ? 1 : 0) + (CLOUD && !state.showPets ? 1 : 0);
+  const b = $('filterN'); b.hidden = !n; b.textContent = n;
+}
 function render(fit){
   const list = filtered();
   $('count').textContent = list.length + (list.length === 1 ? ' actividad' : ' actividades');
   $('list').innerHTML = list.length ? list.map(card).join('') : '<div class="empty"><strong>Sin resultados</strong>Quita algún filtro, prueba otra fecha o cambia la búsqueda para ver más actividades.</div>';
   drawMarkers(list, fit);
   drawPets();
+  updateFilterBadge();
   renderChips();
   renderWhens();
   renderHome();
@@ -219,7 +241,7 @@ function openDetail(id){
 /* ---- ubicación del usuario (solo se usa en el navegador, no se envía a ningún servidor) ---- */
 function setUser(lat, lng){
   state.user = {lat:lat, lng:lng};
-  state.nearOn = true; state.picking = false;
+  state.nearOn = true; state.picking = false; setSheet(false);
   map.getContainer().style.cursor = '';
   if(meMarker) meMarker.remove();
   meMarker = L.marker([lat, lng], {icon:L.divIcon({className:'', html:'<span class="me"></span>', iconSize:[16,16], iconAnchor:[8,8]}), interactive:false, keyboard:false}).addTo(map);
@@ -230,6 +252,7 @@ function setUser(lat, lng){
 }
 /* si no hay GPS o permiso, la persona marca su ubicación tocando el mapa */
 function pickOnMap(msg){
+  setSheet(false);
   const btn = $('near');
   btn.disabled = false; btn.textContent = 'Cerca de mí';
   state.picking = true;
@@ -289,6 +312,7 @@ document.addEventListener('click', e => {
   else if(t.dataset.view){
     document.body.classList.remove('view-list', 'view-map'); document.body.classList.add('view-' + t.dataset.view);
     document.querySelectorAll('.toggle button').forEach(b => b.setAttribute('aria-pressed', b === t));
+    setSheet(false);
     if(t.dataset.view === 'map') setTimeout(() => map.invalidateSize(), 50);
   }
   else if(t.dataset.pub){ openPublish(); }
@@ -326,6 +350,10 @@ document.addEventListener('click', e => {
     if(t.closest('#home, #profile') || window.matchMedia('(max-width: 899px)').matches){ openDetail(id); }
   }
 });
+$('filterBtn').addEventListener('click', () => setSheet(true));
+$('sheetDone').addEventListener('click', () => setSheet(false));
+$('sheetBack').addEventListener('click', () => setSheet(false));
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && document.body.classList.contains('sheet-open')) setSheet(false); });
 $('q').addEventListener('input', e => { state.q = e.target.value; render(true); });
 $('loc').addEventListener('change', e => { state.loc = e.target.value; render(true); });
 $('near').addEventListener('click', locate);
@@ -869,6 +897,7 @@ $('ptform').addEventListener('submit', async ev => {
 /* ---- navegación entre Inicio, Explorar y Perfil ---- */
 const ICON_USER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>';
 function setPage(page, silent){
+  setSheet(false);
   document.body.dataset.page = page;
   document.querySelectorAll('.nav, .tab').forEach(b => {
     if(b.dataset.page === page) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
@@ -1170,6 +1199,7 @@ function renderProfile(){
 
 /* ---- inicio ---- */
 LOCS.forEach(l => { const o = document.createElement('option'); o.textContent = l; o.value = l; $('loc').appendChild(o); });
+syncTabbar();
 if(CLOUD){
   ACTS.length = 0;
   render(false);
