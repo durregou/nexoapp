@@ -58,6 +58,7 @@
     if(/weak_password|password should|at least \d+ char/i.test(m + (err.code || ''))) return 'La contraseña es muy débil. Usa mínimo 8 caracteres con letras y números.';
     if(/different from the old|same_password/i.test(m + (err.code || ''))) return 'La nueva contraseña debe ser distinta a la anterior.';
     if(/contraseña incorrecta/i.test(m)) return m;
+    if(/pet_reports_pet_id_reporter_key/i.test(m)) return 'Ya reportaste este aviso. Gracias.';
     if(/reports_activity_id_reporter_key/i.test(m)) return 'Ya reportaste esta actividad. Gracias.';
     if(/duplicate key|23505/i.test(m + (err.code || ''))) return 'Ya estás inscrito en esta actividad.';
     if(/futuras|límite de|permiso|no está disponible|fecha no puede/i.test(m)) return m;
@@ -227,6 +228,20 @@
       var c = await sb.from('pet_contacts').insert({pet_id:ins.data.id, phone:p.phone});
       if(c.error){ await sb.from('pets').delete().eq('id', ins.data.id); await cleanup(); fail(c.error); }
       return {id:ins.data.id, status:ins.data.status};
+    },
+    /* Reportes de avisos de mascotas (mismo flujo que los de actividades). */
+    async reportPet(id, reason, details){
+      var r = await sb.from('pet_reports').insert({pet_id:id, reason:reason, details:details || null});
+      if(r.error) fail(r.error);
+    },
+    async petReports(){
+      var r = await sb.from('pet_reports').select('pet_id, reason, details, created_at').order('created_at');
+      if(r.error) fail(r.error);
+      return r.data;
+    },
+    async dismissPetReports(id){
+      var r = await sb.from('pet_reports').delete().eq('pet_id', id);
+      if(r.error) fail(r.error);
     },
     async resolvePet(id){ var r = await sb.rpc('resolve_pet', {pet_id:id}); if(r.error) fail(r.error); },
     async removePet(id, photoPath){

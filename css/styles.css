@@ -317,3 +317,14 @@ body[data-page="pets"] #pets{display:block}
 .pv-head h2{font-size:clamp(20px,5vw,26px);font-weight:800;margin:4px 0}
 .pt-preview{max-height:180px;max-width:100%;border-radius:12px;object-fit:cover;justify-self:start}
 .chips.wrap{margin:0;padding:2px 0 6px;flex-wrap:wrap;overflow:visible;mask-image:none;-webkit-mask-image:none;cursor:default}
+
+/* mascotas en el mapa de Explorar */
+.petrow{display:flex}
+.petrow[hidden]{display:none!important}
+.petchip svg{width:16px;height:16px}
+.petchip[aria-pressed="true"]{background:#5B3F8C;border-color:#5B3F8C;color:#fff}
+.pin.pet{border-radius:10px}
+.pin.pet.perdido{background:#C62828}
+.pin.pet.encontrado{background:#1F7A4D}
+.nx-cluster.petc{background:#5B3F8C;color:#fff;border-radius:12px}
+.pop-img{display:block;width:140px;height:96px;object-fit:cover;border-radius:8px;margin-bottom:6px}

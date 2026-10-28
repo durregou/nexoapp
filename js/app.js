@@ -10,7 +10,7 @@ const CAT = {
   animales:{name:'Animales', long:'Protección animal', icon:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><ellipse cx="5.500" cy="11" rx="2" ry="2.600"/><ellipse cx="9.500" cy="6.500" rx="2" ry="2.600"/><ellipse cx="14.500" cy="6.500" rx="2" ry="2.600"/><ellipse cx="18.500" cy="11" rx="2" ry="2.600"/><path d="M12 11c-3 0-5.500 3-5.500 5.500 0 2 1.700 2.800 3.200 2.500 1-.2 1.500-.5 2.300-.5s1.300.3 2.300.5c1.500.3 3.200-.5 3.200-2.500C17.500 14 15 11 12 11z"/></svg>'}
 };
 
-const state = {picking:false, cat:'todas', when:'todas', q:'', loc:'', sel:null, user:null, authUser:null, isAdmin:false, pets:[], myPets:[], pendingPets:[], petKind:'todos', petSpecies:'todas', myPubs:[], pending:[], reports:[], hashDone:false, reportId:null, busy:false, nearOn:false, joined:loadJoined()};
+const state = {picking:false, cat:'todas', when:'todas', q:'', loc:'', sel:null, user:null, authUser:null, isAdmin:false, pets:[], myPets:[], pendingPets:[], petReports:[], showPets:true, reportKind:'activity', petKind:'todos', petSpecies:'todas', myPubs:[], pending:[], reports:[], hashDone:false, reportId:null, busy:false, nearOn:false, joined:loadJoined()};
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -74,27 +74,51 @@ function filtered(){
 /* ---- mapa ---- */
 const map = L.map('map', {minZoom:CFG.MIN_ZOOM, maxBounds:CFG.BOUNDS, maxBoundsViscosity:0.8}).setView(CFG.CENTER, CFG.ZOOM);
 L.tileLayer(CFG.TILE_URL, {maxZoom:19, attribution:CFG.TILE_ATTRIBUTION}).addTo(map);
-const layer = (L.markerClusterGroup ? L.markerClusterGroup({
+const makeCluster = cls => L.markerClusterGroup ? L.markerClusterGroup({
   showCoverageOnHover:false, maxClusterRadius:46,
   zoomToBoundsOnClick:false, spiderfyOnMaxZoom:false,   /* el clic se maneja abajo, en 'clusterclick' */
-  iconCreateFunction: c => L.divIcon({className:'', html:'<span class="nx-cluster">' + c.getChildCount() + '</span>', iconSize:[40,40]})
-}) : L.layerGroup()).addTo(map);
+  iconCreateFunction: c => L.divIcon({className:'', html:'<span class="nx-cluster ' + cls + '">' + c.getChildCount() + '</span>', iconSize:[40,40]})
+}) : L.layerGroup();
+const layer = makeCluster('').addTo(map);          /* actividades */
+const petLayer = makeCluster('petc').addTo(map);   /* mascotas, con su propio grupo y color */
 const markers = new Map();
 let meMarker = null;
 
 /* Al tocar un grupo: si sus pines están en el mismo punto (varias actividades en un mismo lugar) el
    zoom nunca los separa, así que se abren en abanico; si no, el mapa se acerca a ellos. */
-if(layer.on) layer.on('clusterclick', e => {
+const onClusterClick = e => {
   const c = e.layer, b = c.getBounds();
   if(map.distance(b.getSouthWest(), b.getNorthEast()) < 40) c.spiderfy();
   else c.zoomToBounds({padding:[48, 48]});
-});
+};
+if(layer.on) layer.on('clusterclick', onClusterClick);
+if(petLayer.on) petLayer.on('clusterclick', onClusterClick);
 
 function pinIcon(a, sel){
   return L.divIcon({className:'', html:'<span class="pin ' + a.cat + (sel ? ' sel' : '') + '">' + CAT[a.cat].icon + '</span>', iconSize:[34,34], iconAnchor:[17,17], popupAnchor:[0,-18]});
 }
 function popupHtml(a){
   return '<div class="pop"><strong>' + esc(a.title) + '</strong><span>' + esc(when(a)) + '</span><br><button type="button" data-open="' + a.id + '">Ver detalles</button></div>';
+}
+function petIcon(p){
+  return L.divIcon({className:'', html:'<span class="pin pet ' + p.kind + '">' + CAT.animales.icon + '</span>', iconSize:[34,34], iconAnchor:[17,17], popupAnchor:[0,-18]});
+}
+function petPopup(p){
+  return '<div class="pop">' + (p.photo ? '<img class="pop-img" src="' + esc(p.photo) + '" alt="">' : '') +
+    '<strong>' + esc(petName(p)) + '</strong><span>' + KIND_LABEL[p.kind] + ' · ' + SPECIES[p.species] + ' · ' + fmtDay(p.seen) + '</span><br>' +
+    '<button type="button" data-petopen="' + p.id + '">Ver aviso</button></div>';
+}
+/* Mascotas en el mapa de Explorar: pin cuadrado con huella (rojo = perdido, verde = encontrado). */
+function drawPets(){
+  petLayer.clearLayers();
+  document.querySelectorAll('[data-petmap]').forEach(b => { b.hidden = !CLOUD; b.setAttribute('aria-pressed', String(state.showPets)); });
+  const row = document.querySelector('.petrow'); if(row) row.hidden = !CLOUD;
+  if(!CLOUD || !state.showPets) return;
+  state.pets.forEach(p => {
+    if(!Number.isFinite(p.lat) || !Number.isFinite(p.lng)) return;
+    L.marker([p.lat, p.lng], {icon:petIcon(p), title:KIND_LABEL[p.kind] + ': ' + petName(p), keyboard:true, riseOnHover:true})
+      .bindPopup(petPopup(p)).addTo(petLayer);
+  });
 }
 function drawMarkers(list, fit){
   layer.clearLayers(); markers.clear();
@@ -136,6 +160,7 @@ function render(fit){
   $('count').textContent = list.length + (list.length === 1 ? ' actividad' : ' actividades');
   $('list').innerHTML = list.length ? list.map(card).join('') : '<div class="empty"><strong>Sin resultados</strong>Quita algún filtro, prueba otra fecha o cambia la búsqueda para ver más actividades.</div>';
   drawMarkers(list, fit);
+  drawPets();
   renderChips();
   renderWhens();
   renderHome();
@@ -240,12 +265,15 @@ function locate(){
 
 /* ---- eventos ---- */
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-id],[data-cat],[data-open],[data-join],[data-close],[data-view],[data-when],[data-pub],[data-pubclose],[data-del],[data-page]:not(body),[data-login],[data-loginclose],[data-logout],[data-editname],[data-nameclose],[data-approve],[data-reject],[data-ics],[data-copy],[data-report],[data-reportclose],[data-dismiss],[data-install],[data-lmode],[data-forgot],[data-showpw],[data-passclose],[data-delclose],[data-chpass],[data-delacct],[data-signup],[data-petnew],[data-petkind],[data-petspecies],[data-petopen],[data-ptkind],[data-ptclose],[data-petresolve],[data-petdel],[data-petcopy],[data-petapprove],[data-petreject]');
+  const t = e.target.closest('[data-id],[data-cat],[data-open],[data-join],[data-close],[data-view],[data-when],[data-pub],[data-pubclose],[data-del],[data-page]:not(body),[data-login],[data-loginclose],[data-logout],[data-editname],[data-nameclose],[data-approve],[data-reject],[data-ics],[data-copy],[data-report],[data-reportclose],[data-dismiss],[data-install],[data-lmode],[data-forgot],[data-showpw],[data-passclose],[data-delclose],[data-chpass],[data-delacct],[data-signup],[data-petnew],[data-petkind],[data-petspecies],[data-petopen],[data-ptkind],[data-ptclose],[data-petresolve],[data-petdel],[data-petcopy],[data-petapprove],[data-petreject],[data-petmap],[data-reportpet],[data-petdismiss]');
   if(!t) return;
   if(t.dataset.page){
     if(t.dataset.setcat){ state.cat = t.dataset.setcat; state.when = 'todas'; }
     setPage(t.dataset.page);
   }
+  else if(t.dataset.petmap){ state.showPets = !state.showPets; drawPets(); }
+  else if(t.dataset.reportpet){ openReport(+t.dataset.reportpet, 'pet'); }
+  else if(t.dataset.petdismiss){ dismissPetReports(+t.dataset.petdismiss); }
   else if(t.dataset.petnew){ openPetForm(); }
   else if(t.dataset.petkind){ state.petKind = t.dataset.petkind; renderPets(); }
   else if(t.dataset.petspecies){ state.petSpecies = t.dataset.petspecies; renderPets(); }
@@ -462,10 +490,11 @@ async function reloadCloud(){
       uid ? soft(CLOUD.isAdmin(uid), false) : false
     ]);
     const [pend, reps] = admin ? await Promise.all([soft(CLOUD.pending(), []), soft(CLOUD.reports(), [])]) : [[], []];
-    const [pets, myPets, pendPets] = await Promise.all([
-      soft(CLOUD.pets(uid), []), uid ? soft(CLOUD.myPets(uid), []) : [], admin ? soft(CLOUD.pendingPets(), []) : []
+    const [pets, myPets, pendPets, petReps] = await Promise.all([
+      soft(CLOUD.pets(uid), []), uid ? soft(CLOUD.myPets(uid), []) : [], admin ? soft(CLOUD.pendingPets(), []) : [],
+      admin ? soft(CLOUD.petReports(), []) : []
     ]);
-    Object.assign(state, {pets:pets, myPets:myPets, pendingPets:pendPets});
+    Object.assign(state, {pets:pets, myPets:myPets, pendingPets:pendPets, petReports:petReps});
     ACTS.splice(0, ACTS.length, ...list);
     Object.assign(state, {joined:joined, myPubs:mine, isAdmin:admin, pending:pend, reports:reps});
   } catch(e){ toast('No pudimos cargar las actividades. ' + CLOUD.friendly(e)); }
@@ -674,7 +703,9 @@ function openPet(id){
     '<div class="d-actions">' +
       (p.mine && p.status === 'approved' && !p.resolved ? '<button type="button" class="btn block" data-petresolve="' + p.id + '">' + (p.kind === 'perdido' ? '¡Ya apareció!' : 'Ya volvió con su familia') + '</button>' : '') +
       ((p.mine || state.isAdmin) ? '<button type="button" class="btn ghost danger block" data-petdel="' + p.id + '">' + (p.mine ? 'Eliminar mi reporte' : 'Quitar reporte (admin)') + '</button>' : '') +
-      '<button type="button" class="btn ghost block" onclick="this.closest(\'dialog\').close()">Cerrar</button></div></div>';
+      '<button type="button" class="btn ghost block" onclick="this.closest(\'dialog\').close()">Cerrar</button>' +
+      (CLOUD && !p.mine && p.status === 'approved' ? '<button type="button" class="reportlink" data-reportpet="' + p.id + '">Reportar este aviso</button>' : '') +
+    '</div></div>';
   if(!dlg.open) showDialog('petview');
   const box = dlg.querySelector('#pv-contact');
   if(!state.authUser){
@@ -936,13 +967,16 @@ async function installApp(){
 }
 
 /* ---- reportar una actividad ---- */
-function openReport(id){
-  const a = ACTS.find(x => x.id === id); if(!a || !CLOUD) return;
-  if(!state.authUser){ openLogin('Inicia sesión para reportar una actividad.'); return; }
-  state.reportId = id;
-  $('r-sub').textContent = a.title;
+function openReport(id, kind){
+  kind = kind || 'activity';
+  const a = kind === 'pet' ? findPet(id) : ACTS.find(x => x.id === id); if(!a || !CLOUD) return;
+  if(!state.authUser){ openLogin(kind === 'pet' ? 'Inicia sesión para reportar un aviso.' : 'Inicia sesión para reportar una actividad.'); return; }
+  state.reportId = id; state.reportKind = kind;
+  $('r-title').textContent = kind === 'pet' ? 'Reportar aviso de mascota' : 'Reportar actividad';
+  $('r-sub').textContent = kind === 'pet' ? KIND_LABEL[a.kind] + ': ' + petName(a) : a.title;
   $('r-reason').value = 'spam'; $('r-details').value = ''; $('r-err').hidden = true;
   if($('detail').open) $('detail').close();
+  if($('petview').open) $('petview').close();
   const d = $('reportdlg');
   if(typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
   $('r-reason').focus();
@@ -952,7 +986,8 @@ $('rform').addEventListener('submit', async ev => {
   if(!CLOUD || state.busy || !state.reportId) return;
   state.busy = true; $('r-send').disabled = true;
   try {
-    await CLOUD.report(state.reportId, $('r-reason').value, $('r-details').value.trim());
+    if(state.reportKind === 'pet') await CLOUD.reportPet(state.reportId, $('r-reason').value, $('r-details').value.trim());
+    else await CLOUD.report(state.reportId, $('r-reason').value, $('r-details').value.trim());
     $('reportdlg').close(); toast('Gracias. Revisaremos tu reporte.');
     reloadCloud();
   } catch(e){ const er = $('r-err'); er.textContent = CLOUD.friendly(e); er.hidden = false; }
@@ -1005,8 +1040,10 @@ function renderAdmin(){
   const reported = state.isAdmin ? reportedList() : [];
   const repIds = new Set(reported.map(x => x.a.id));
   const pend = state.isAdmin ? state.pending.filter(a => !repIds.has(a.id)) : [];
-  const pendPets = state.isAdmin ? state.pendingPets : [];
-  const n = pend.length + reported.length + pendPets.length;
+  const repPets = state.isAdmin ? reportedPetList() : [];
+  const repPetIds = new Set(repPets.map(x => x.p.id));
+  const pendPets = state.isAdmin ? state.pendingPets.filter(p => !repPetIds.has(p.id)) : [];
+  const n = pend.length + reported.length + pendPets.length + repPets.length;
   document.querySelectorAll('[data-page="admin"]').forEach(b => {
     b.hidden = !state.isAdmin;
     const c = b.querySelector('.adm-n'); if(c){ c.hidden = !n; c.textContent = n; }
@@ -1018,8 +1055,39 @@ function renderAdmin(){
     (reported.length ? '<h2 class="sec-sub">Reportadas</h2><div class="feed two">' + reported.map(reportCard).join('') + '</div>' : '') +
     '<h2 class="sec-sub">Por revisar</h2><div class="feed two">' +
     (pend.length ? pend.map(adminCard).join('') : '<div class="empty"><strong>Todo al día</strong>No hay publicaciones pendientes.</div>') + '</div>' +
+    (repPets.length ? '<h2 class="sec-sub">Avisos de mascotas reportados (' + repPets.length + ')</h2><div class="feed two">' + repPets.map(petReportCard).join('') + '</div>' : '') +
     '<h2 class="sec-sub">Mascotas por revisar (' + pendPets.length + ')</h2><div class="feed two">' +
     (pendPets.length ? pendPets.map(adminPetCard).join('') : '<div class="empty"><strong>Todo al día</strong>No hay reportes de mascotas pendientes.</div>') + '</div></div>';
+}
+function reportedPetList(){
+  const by = {};
+  state.petReports.forEach(r => { (by[r.pet_id] = by[r.pet_id] || []).push(r); });
+  return Object.keys(by).map(id => {
+    const p = state.pets.find(x => x.id === +id) || state.pendingPets.find(x => x.id === +id);
+    return p ? {p:p, reps:by[id]} : null;
+  }).filter(Boolean);
+}
+function petReportCard(item){
+  const p = item.p, hidden = p.status === 'pending';
+  const items = item.reps.map(r => '<li>' + esc(REASON[r.reason] || r.reason) + (r.details ? ': «' + esc(r.details) + '»' : '') + '</li>').join('');
+  return '<article class="act" data-cat="animales"><span class="edge"></span><span class="body">' +
+    '<span class="kind">' + KIND_LABEL[p.kind] + ' · ' + SPECIES[p.species] + '</span><h3>' + esc(petName(p)) + '</h3>' +
+    (p.photo ? '<img class="pv-photo" style="border-radius:12px;max-height:220px" src="' + esc(p.photo) + '" alt="Foto del aviso">' : '<span class="meta">Sin foto</span>') +
+    '<span class="meta">' + esc(p.loc) + ' · ' + esc(p.place) + '</span><span class="adm-desc">' + esc(p.desc) + '</span>' +
+    '<span class="pill pill-' + (hidden ? 'rejected' : 'pending') + '">' + item.reps.length + (item.reps.length === 1 ? ' reporte' : ' reportes') + (hidden ? ' · oculto' : ' · visible') + '</span>' +
+    '<ul class="rep-list">' + items + '</ul>' +
+    '<span class="adm-btns"><button type="button" class="btn" data-petreject="' + p.id + '">Ocultar</button>' +
+    '<button type="button" class="btn ghost" data-petdismiss="' + p.id + '">' + (hidden ? 'Descartar y volver a publicar' : 'Descartar reportes') + '</button></span></span></article>';
+}
+async function dismissPetReports(id){
+  if(!CLOUD || !state.isAdmin || state.busy) return;
+  state.busy = true;
+  try {
+    await CLOUD.dismissPetReports(id);
+    if(state.pendingPets.some(p => p.id === id)) await CLOUD.moderatePet(id, 'approved');
+  } catch(e){ toast(CLOUD.friendly(e)); state.busy = false; return; }
+  state.busy = false;
+  toast('Reportes descartados'); await reloadCloud();
 }
 async function dismissReports(id){
   if(!CLOUD || !state.isAdmin || state.busy) return;

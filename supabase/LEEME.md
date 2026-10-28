@@ -115,4 +115,26 @@ En **Perfil → Eliminar mi cuenta** la persona escribe su contraseña y la pala
 
 **Para activarlo:** corre `schema.sql` completo otra vez. Crea las tablas, el bucket y las reglas. Después, en **Storage** deberías ver el bucket `pet-photos` marcado como *Public*. El plan gratuito incluye 1 GB de almacenamiento, que alcanza para miles de fotos reducidas.
 
-**Pendiente a futuro:** la pestaña de reportes no tiene todavía el botón «Reportar» para denunciar un reporte de mascota indebido (hoy lo quitas tú desde el panel). Las fotos de reportes que expiran a los 60 días siguen en Storage; se pueden limpiar con una tarea programada.
+
+## Mascotas en el mapa y reportes de avisos
+- En **Explorar** hay un interruptor «Mascotas perdidas y encontradas en el mapa». Los avisos salen como pines cuadrados con una huella (rojo = perdido, verde = encontrado), y los cercanos se agrupan en círculos morados. Al tocar un pin se abre una ventana con «Ver aviso».
+- En el detalle de un aviso ajeno hay «Reportar este aviso» (mismos motivos que para actividades). Con **3 reportes de personas distintas** el aviso se oculta solo y vuelve a tu cola. En **Administrar → Avisos de mascotas reportados** eliges **Ocultar** o **Descartar reportes**.
+- Para activarlo corre `schema.sql` completo otra vez: crea la tabla `pet_reports` y actualiza «Ya apareció» para que el aviso venza el mismo día.
+
+## Limpieza automática de fotos y avisos vencidos
+Una tarea diaria (a las 3:17 a. m. hora de Bogotá) borra:
+1. Los avisos que vencieron hace más de **7 días** (los «Ya apareció» vencen el día que se resuelven) y los rechazados con más de **30 días**. Se borra la foto y el aviso (con él, el celular y los reportes).
+2. Las **fotos huérfanas**: archivos del bucket que ningún aviso usa y tienen más de 24 horas (subidas que fallaron o cuentas eliminadas). Por seguridad no borra nada si encuentra más de 50 de golpe.
+
+Corre en **GitHub Actions** (gratis) y no dentro de Supabase porque borrar un archivo de Storage desde SQL no lo elimina de verdad: hay que usar su API con una llave de servicio.
+
+**Para activarla:**
+1. Corre `schema.sql` completo otra vez (si no lo hiciste).
+2. En GitHub: **Settings → Secrets and variables → Actions → New repository secret**, y crea dos:
+   - `SUPABASE_URL`: la URL de tu proyecto (`https://xxxx.supabase.co`).
+   - `SUPABASE_SERVICE_KEY`: la llave **service_role** (o **Secret key**) de Supabase → Project Settings → API Keys.
+3. Ve a la pestaña **Actions → Limpieza de mascotas vencidas → Run workflow** y déjala en **Simulacro** (`dry_run`): muestra lo que borraría sin borrar nada. Si el resultado te parece bien, corre otra con el simulacro desmarcado.
+4. Desde ahí corre sola cada día.
+
+**Cuidado con la llave de servicio:** da acceso total a tu base de datos. Ponla solo como *secret* de GitHub; nunca en el código, en el chat ni en la página. Si se filtra, genera una nueva en Supabase y reemplaza el secret.
+GitHub pausa las tareas programadas de un repositorio sin actividad durante 60 días: te avisa por correo y se reactivan con cualquier cambio o con «Enable workflow».

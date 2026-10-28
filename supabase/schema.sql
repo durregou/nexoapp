@@ -292,7 +292,10 @@ create trigger before_pet before insert on public.pets
 -- «Ya apareció»: solo quien lo reportó puede marcarlo como resuelto (nada más puede cambiar).
 create or replace function public.resolve_pet(pet_id bigint) returns void
 language sql security definer set search_path = public as $$
-  update public.pets set resolved = true where id = pet_id and owner = auth.uid();
+  update public.pets
+     set resolved = true,
+         expires_on = least(expires_on, (now() at time zone 'America/Bogota')::date)   -- la limpieza lo borra 7 días después
+   where id = pet_id and owner = auth.uid();
 $$;
 revoke all on function public.resolve_pet(bigint) from public, anon;
 grant execute on function public.resolve_pet(bigint) to authenticated;
@@ -315,3 +318,55 @@ create policy "fotos mascotas: ver" on storage.objects for select to authenticat
   using (bucket_id = 'pet-photos' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
 create policy "fotos mascotas: borrar" on storage.objects for delete to authenticated
   using (bucket_id = 'pet-photos' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
+
+-- ───────── Reportes de avisos de mascotas ─────────
+create table if not exists public.pet_reports (
+  id         bigint generated always as identity primary key,
+  pet_id     bigint not null references public.pets(id) on delete cascade,
+  reporter   uuid   not null default auth.uid() references auth.users(id) on delete cascade,
+  reason     text   not null check (reason in ('spam','inapropiado','falso','peligroso','otro')),
+  details    text   check (details is null or char_length(details) <= 200),
+  created_at timestamptz not null default now(),
+  unique (pet_id, reporter)                  -- una persona reporta un aviso una sola vez
+);
+create index if not exists pet_reports_pet_idx on public.pet_reports (pet_id);
+alter table public.pet_reports enable row level security;
+
+drop policy if exists "reportar aviso"                 on public.pet_reports;
+drop policy if exists "ver reportes de avisos (admin)" on public.pet_reports;
+drop policy if exists "descartar reportes de avisos (admin)" on public.pet_reports;
+create policy "reportar aviso" on public.pet_reports for insert to authenticated with check (reporter = auth.uid());
+create policy "ver reportes de avisos (admin)" on public.pet_reports for select to authenticated using (public.is_admin());
+create policy "descartar reportes de avisos (admin)" on public.pet_reports for delete to authenticated using (public.is_admin());
+grant insert, select, delete on public.pet_reports to authenticated;
+
+-- Antes de guardar: solo avisos visibles y máximo 20 reportes de avisos por persona al día.
+create or replace function public.before_pet_report() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  new.reporter := auth.uid();
+  if not exists (select 1 from public.pets where id = new.pet_id and status = 'approved' and not resolved) then
+    raise exception 'El aviso no está disponible';
+  end if;
+  if (select count(*) from public.pet_reports
+      where reporter = new.reporter and created_at > now() - interval '1 day') >= 20 then
+    raise exception 'Llegaste al límite de reportes por día';
+  end if;
+  return new;
+end $$;
+drop trigger if exists before_pet_report on public.pet_reports;
+create trigger before_pet_report before insert on public.pet_reports
+  for each row execute function public.before_pet_report();
+
+-- Con 3 reportes de personas distintas, el aviso se oculta solo y vuelve a la cola de revisión.
+create or replace function public.after_pet_report() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if (select count(*) from public.pet_reports where pet_id = new.pet_id) >= 3 then
+    update public.pets set status = 'pending' where id = new.pet_id and status = 'approved';
+  end if;
+  return null;
+end $$;
+drop trigger if exists after_pet_report on public.pet_reports;
+create trigger after_pet_report after insert on public.pet_reports
+  for each row execute function public.after_pet_report();
